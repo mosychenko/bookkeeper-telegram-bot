@@ -49,6 +49,11 @@ func Load() (Config, error) {
 	}
 	token := strings.TrimSpace(os.Getenv("TELEGRAM_BOT_TOKEN"))
 	webApp := strings.TrimSpace(os.Getenv("WEBAPP_URL"))
+	if webApp == "" {
+		if d := cleanDomain(os.Getenv("DOMAIN")); d != "" {
+			webApp = "https://" + d
+		}
+	}
 	if token != "" {
 		u, err := url.Parse(webApp)
 		if err != nil || u.Scheme != "https" || u.Host == "" {
@@ -106,6 +111,17 @@ func googleCreds() ([]byte, error) {
 		return b, nil
 	}
 	return nil, fmt.Errorf("для DATA_SOURCE=sheets нужен GOOGLE_SERVICE_ACCOUNT_JSON или GOOGLE_APPLICATION_CREDENTIALS")
+}
+
+func cleanDomain(raw string) string {
+	d := strings.TrimSpace(raw)
+	d = strings.TrimPrefix(d, "https://")
+	d = strings.TrimPrefix(d, "http://")
+	d = strings.Trim(d, "/")
+	if i := strings.IndexAny(d, "/:"); i >= 0 {
+		d = d[:i]
+	}
+	return d
 }
 
 func getenv(key, def string) string {

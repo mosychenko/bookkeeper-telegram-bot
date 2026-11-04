@@ -70,32 +70,51 @@ func Assemble(now time.Time, bf BudgetFile, mp Mapping, opsGrid, curGrid, prevGr
 		incomeDefault = bf.Income.Advance
 	}
 
-	planned, plannedKnown := incomeFrom(cur, incomeName, planCol)
+	planned, plannedKnown, err := plannedIncome(curGrid, mp, period.Kind)
+	if err != nil {
+		return budget.Input{}, err
+	}
+	if mp.Monthly.IncomePlan.Row == 0 {
+		planned, plannedKnown = incomeFrom(cur, incomeName, planCol)
+	}
 	if !plannedKnown {
 		planned = incomeDefault
-		warns = append(warns, fmt.Sprintf("Приход «%s» в листе не найден, взято %s из настроек. Сверьте имя строки.", incomeName, budget.FormatRUB(planned)))
+		label := incomeName
+		if strings.TrimSpace(label) == "" {
+			label = "периода"
+		}
+		warns = append(warns, fmt.Sprintf("Приход «%s» в листе не найден, взято %s из настроек.", label, budget.FormatRUB(planned)))
 	}
-	lastIncome, lastKnown := incomeFrom(prev, incomeName, planCol)
+	lastIncome, lastKnown, err := actualIncome(prevGrid, mp, period.Kind)
+	if err != nil {
+		return budget.Input{}, err
+	}
+	if !actualConfigured(mp, period.Kind) {
+		lastIncome, lastKnown = incomeFrom(prev, incomeName, planCol)
+	}
 
 	var mandatory []budget.Payment
-	for _, item := range bf.ForPeriod(period.Kind) {
+	for _, item := range bf.Mandatory {
+		if !item.allows(period.Kind) {
+			continue
+		}
 		amount, fromSheet := amountFromRow(cur[norm(item.Category)], planCol)
-		if !fromSheet {
-			if item.Optional && item.AmountDefault == 0 {
+		// An empty cell means this category is not in this period.
+		// The other period has its own column. A blank fill is used only
+		// when the config explicitly sets one (see advance_if_blank).
+		if !fromSheet || amount == 0 {
+			if fill := item.blankFill(period.Kind); fill > 0 {
+				amount = fill
+			} else {
 				continue
 			}
-			amount = item.AmountDefault
-			warns = append(warns, fmt.Sprintf("«%s»: в листе нет суммы, взято %s из настроек.", item.Name, budget.FormatRUB(amount)))
-		}
-		if item.Optional && amount == 0 {
-			continue
 		}
 		p := budget.Payment{
 			Name:   item.Name,
 			Amount: amount,
-			Due:    item.DueLabel(period.Month),
+			Due:    item.DueLabel(period.Month, period.Kind),
 		}
-		if note, ok := paidNote(ops, bf, item.Category, period); ok {
+		if note, ok := paidNote(ops, bf, item.opsCategory(), period); ok {
 			p.Paid = true
 			p.PaidNote = note
 		}
@@ -103,7 +122,7 @@ func Assemble(now time.Time, bf BudgetFile, mp Mapping, opsGrid, curGrid, prevGr
 	}
 
 	var flexible []budget.Flex
-	for _, item := range bf.Flexible {
+	for _, item := range bf.flexItems() {
 		row := cur[norm(item.Category)]
 		prevRow := prev[norm(item.Category)]
 		var plan *int64
@@ -113,16 +132,22 @@ func Assemble(now time.Time, bf BudgetFile, mp Mapping, opsGrid, curGrid, prevGr
 		default:
 			plan = row.PlanSalary
 		}
-		fact := factOf(mp.FactSource, row, ops, item.Category, period.Start, period.End, mp.Types)
+		fact := factOf(mp.FactSource, row, ops, item.opsCategory(), period.Start, period.End, mp.Types)
 		var last int64
 		if mp.LastMonthFact == "operations" {
 			py, pm := period.PreviousFundingMonth()
 			start, end := monthSpan(py, pm)
-			last = sumCategory(ops, item.Category, start, end, mp.Types)
+			last = sumCategory(ops, item.opsCategory(), start, end, mp.Types)
 		} else if prevRow.Fact != nil {
 			last = *prevRow.Fact
 		}
-		if plan == nil && fact == 0 && last == 0 {
+		// Rare categories stay in the pace and cover math, but the screen
+		// hides them until this period has its own plan or fact.
+		if item.Rare {
+			if plan == nil && fact == 0 {
+				continue
+			}
+		} else if plan == nil && fact == 0 && last == 0 {
 			continue
 		}
 		flexible = append(flexible, budget.Flex{
@@ -167,6 +192,60 @@ func Assemble(now time.Time, bf BudgetFile, mp Mapping, opsGrid, curGrid, prevGr
 		HasPeriodSpend:  hasSpend,
 		Warnings:        warns,
 	}, nil
+}
+
+func plannedIncome(grid [][]string, mp Mapping, kind budget.Kind) (int64, bool, error) {
+	ip := mp.Monthly.IncomePlan
+	if ip.Row == 0 {
+		return 0, false, nil
+	}
+	if err := expectLabel(grid, ip.Row, ip.LabelColumn, ip.Label); err != nil {
+		return 0, false, fmt.Errorf("плановый доход: %w", err)
+	}
+	col := ip.SalaryColumn
+	if kind == budget.KindAdvance {
+		col = ip.AdvanceColumn
+	}
+	n, ok := parseMoney(gridCell(grid, ip.Row, col))
+	return n, ok, nil
+}
+
+func actualConfigured(mp Mapping, kind budget.Kind) bool {
+	cell := mp.Monthly.IncomeActual.Salary
+	if kind == budget.KindAdvance {
+		cell = mp.Monthly.IncomeActual.Advance
+	}
+	return cell.Row > 0 && strings.TrimSpace(cell.Column) != ""
+}
+
+func actualIncome(grid [][]string, mp Mapping, kind budget.Kind) (int64, bool, error) {
+	if !actualConfigured(mp, kind) {
+		return 0, false, nil
+	}
+	cell := mp.Monthly.IncomeActual.Salary
+	if kind == budget.KindAdvance {
+		cell = mp.Monthly.IncomeActual.Advance
+	}
+	if err := expectLabel(grid, cell.Row, cell.LabelColumn, cell.Label); err != nil {
+		return 0, false, fmt.Errorf("фактический доход: %w", err)
+	}
+	n, ok := parseMoney(gridCell(grid, cell.Row, cell.Column))
+	return n, ok, nil
+}
+
+func expectLabel(grid [][]string, row int, col, want string) error {
+	want = normalizeWS(want)
+	if want == "" {
+		return nil
+	}
+	if strings.TrimSpace(col) == "" {
+		col = "A"
+	}
+	got := normalizeWS(gridCell(grid, row, col))
+	if got != want {
+		return fmt.Errorf("ячейка %s%d: в таблице %q, ожидается %q", strings.ToUpper(strings.TrimSpace(col)), row, got, want)
+	}
+	return nil
 }
 
 func incomeFrom(rows map[string]CatRow, name, planCol string) (int64, bool) {
@@ -265,8 +344,8 @@ func sumAll(ops []Operation, start, end time.Time, types TypeNames) int64 {
 
 func sumFlexible(ops []Operation, bf BudgetFile, start, end time.Time, types TypeNames) int64 {
 	var n int64
-	for _, item := range bf.Flexible {
-		n += sumCategory(ops, item.Category, start, end, types)
+	for _, item := range bf.flexItems() {
+		n += sumCategory(ops, item.opsCategory(), start, end, types)
 	}
 	return n
 }
@@ -278,7 +357,7 @@ func paceFrom(ops []Operation, bf BudgetFile, prev map[string]CatRow, prevPeriod
 	}
 	var monthly int64
 	var any bool
-	for _, item := range bf.Flexible {
+	for _, item := range bf.flexItems() {
 		row := prev[norm(item.Category)]
 		if row.Fact != nil {
 			monthly += *row.Fact

@@ -12,8 +12,10 @@ import (
 )
 
 // BudgetFile is the family config: which categories are mandatory, when they
-// leave the account, and which are flexible. Amounts in the sheet win;
-// amount_default is only a fallback (and the fixture's source of truth).
+// leave the account, and which are flexible. The sheet does not mark that
+// split and has no payment dates, so both live here. Amounts come from the
+// period column of the monthly tab. amount_default is not applied to a
+// blank cell: a blank cell means the category is not in that period.
 type BudgetFile struct {
 	Payday struct {
 		SalaryDay  int `yaml:"salary_day"`
@@ -21,6 +23,7 @@ type BudgetFile struct {
 	} `yaml:"payday"`
 	Mandatory []MandatoryItem `yaml:"mandatory"`
 	Flexible  []FlexibleItem  `yaml:"flexible"`
+	Rare      []FlexibleItem  `yaml:"rare"`
 	Income    struct {
 		Salary  int64 `yaml:"salary"`
 		Advance int64 `yaml:"advance"`
@@ -29,22 +32,50 @@ type BudgetFile struct {
 }
 
 type MandatoryItem struct {
-	ID            string `yaml:"id"`
-	Name          string `yaml:"name"`
-	Category      string `yaml:"category"`
-	Period        string `yaml:"period"` // salary | advance
-	AmountDefault int64  `yaml:"amount_default"`
-	Optional      bool   `yaml:"optional"`
-	Due           *struct {
-		Day         int  `yaml:"day"`
-		Approximate bool `yaml:"approximate"`
-	} `yaml:"due"`
-	DueDays []int  `yaml:"due_days"`
-	DueText string `yaml:"due_text"`
+	ID             string   `yaml:"id"`
+	Name           string   `yaml:"name"`
+	Category       string   `yaml:"category"`
+	OperationsName string   `yaml:"operations_name"`
+	Period         string   `yaml:"period"` // legacy single period; periods wins when set
+	Periods        []string `yaml:"periods"`
+	AmountDefault  int64    `yaml:"amount_default"`
+	// SalaryIfBlank and AdvanceIfBlank fill a period only when that
+	// column is empty. Zero means «leave the blank cell blank».
+	SalaryIfBlank  int64   `yaml:"salary_if_blank"`
+	AdvanceIfBlank int64   `yaml:"advance_if_blank"`
+	Optional       bool    `yaml:"optional"`
+	Due            *DueDay `yaml:"due"`
+	DueSalary      *DueDay `yaml:"due_salary"`
+	DueAdvance     *DueDay `yaml:"due_advance"`
+	DueDays        []int   `yaml:"due_days"`
+	DueRange       []int   `yaml:"due_range"`
+	DueText        string  `yaml:"due_text"`
+}
+
+// DueDay is one payment day. Approximate prints a tilde.
+type DueDay struct {
+	Day         int  `yaml:"day"`
+	Approximate bool `yaml:"approximate"`
 }
 
 type FlexibleItem struct {
-	Category string `yaml:"category"`
+	Category       string `yaml:"category"`
+	OperationsName string `yaml:"operations_name"`
+	Rare           bool   `yaml:"rare"`
+}
+
+func (m MandatoryItem) opsCategory() string {
+	if strings.TrimSpace(m.OperationsName) != "" {
+		return m.OperationsName
+	}
+	return m.Category
+}
+
+func (item FlexibleItem) opsCategory() string {
+	if strings.TrimSpace(item.OperationsName) != "" {
+		return item.OperationsName
+	}
+	return item.Category
 }
 
 func LoadBudget(path string) (BudgetFile, error) {
@@ -67,8 +98,20 @@ func (f BudgetFile) Validate() error {
 		if strings.TrimSpace(m.Name) == "" || strings.TrimSpace(m.Category) == "" {
 			return fmt.Errorf("у обязательного платежа нет имени или категории")
 		}
-		if m.Period != string(budget.KindSalary) && m.Period != string(budget.KindAdvance) {
+		if p := strings.TrimSpace(m.Period); p != "" && p != string(budget.KindSalary) && p != string(budget.KindAdvance) {
 			return fmt.Errorf("%s: period должен быть salary или advance", m.Name)
+		}
+		for _, p := range m.Periods {
+			p = strings.TrimSpace(p)
+			if p != string(budget.KindSalary) && p != string(budget.KindAdvance) {
+				return fmt.Errorf("%s: periods содержит %q", m.Name, p)
+			}
+		}
+		if m.SalaryIfBlank < 0 || m.AdvanceIfBlank < 0 {
+			return fmt.Errorf("%s: запасная сумма отрицательная", m.Name)
+		}
+		if len(m.DueRange) != 0 && (len(m.DueRange) != 2 || m.DueRange[0] < 1 || m.DueRange[1] > 31 || m.DueRange[0] > m.DueRange[1]) {
+			return fmt.Errorf("%s: due_range", m.Name)
 		}
 		if m.ID != "" && seen[m.ID] {
 			return fmt.Errorf("повтор id %s", m.ID)
@@ -76,17 +119,65 @@ func (f BudgetFile) Validate() error {
 		seen[m.ID] = true
 	}
 	flex := map[string]bool{}
-	for _, c := range f.Flexible {
+	if err := addFlex(flex, f.Flexible); err != nil {
+		return err
+	}
+	if err := addFlex(flex, f.Rare); err != nil {
+		return err
+	}
+	for _, m := range f.Mandatory {
+		if flex[norm(m.Category)] {
+			return fmt.Errorf("%s указана и как обязательная, и как гибкая", m.Name)
+		}
+	}
+	return nil
+}
+
+func addFlex(seen map[string]bool, list []FlexibleItem) error {
+	for _, c := range list {
 		n := norm(c.Category)
 		if n == "" {
 			return fmt.Errorf("пустая гибкая категория")
 		}
-		if flex[n] {
+		if seen[n] {
 			return fmt.Errorf("категория %s указана дважды", c.Category)
 		}
-		flex[n] = true
+		seen[n] = true
 	}
 	return nil
+}
+
+// flexItems is every category that behaves as flexible, including rare ones.
+func (f BudgetFile) flexItems() []FlexibleItem {
+	out := make([]FlexibleItem, 0, len(f.Flexible)+len(f.Rare))
+	out = append(out, f.Flexible...)
+	for _, item := range f.Rare {
+		item.Rare = true
+		out = append(out, item)
+	}
+	return out
+}
+
+func (m MandatoryItem) allows(kind budget.Kind) bool {
+	if len(m.Periods) == 0 {
+		if p := strings.TrimSpace(m.Period); p != "" {
+			return p == string(kind)
+		}
+		return true
+	}
+	for _, p := range m.Periods {
+		if strings.TrimSpace(p) == string(kind) {
+			return true
+		}
+	}
+	return false
+}
+
+func (m MandatoryItem) blankFill(kind budget.Kind) int64 {
+	if kind == budget.KindAdvance {
+		return m.AdvanceIfBlank
+	}
+	return m.SalaryIfBlank
 }
 
 func (f BudgetFile) ForPeriod(kind budget.Kind) []MandatoryItem {
@@ -100,8 +191,9 @@ func (f BudgetFile) ForPeriod(kind budget.Kind) []MandatoryItem {
 }
 
 func (f BudgetFile) FlexibleSet() map[string]FlexibleItem {
-	out := make(map[string]FlexibleItem, len(f.Flexible))
-	for _, c := range f.Flexible {
+	items := f.flexItems()
+	out := make(map[string]FlexibleItem, len(items))
+	for _, c := range items {
 		out[norm(c.Category)] = c
 	}
 	return out
@@ -112,9 +204,15 @@ func (f BudgetFile) IsFlexible(category string) bool {
 	return ok
 }
 
-func (m MandatoryItem) DueLabel(month time.Month) string {
+func (m MandatoryItem) DueLabel(month time.Month, kind budget.Kind) string {
+	if label, ok := m.periodDue(kind, month); ok {
+		return label
+	}
 	if strings.TrimSpace(m.DueText) != "" {
 		return m.DueText
+	}
+	if len(m.DueRange) == 2 {
+		return strconv.Itoa(m.DueRange[0]) + "–" + strconv.Itoa(m.DueRange[1]) + "." + strconv.Itoa(int(month))
 	}
 	if len(m.DueDays) > 0 {
 		parts := make([]string, len(m.DueDays))
@@ -124,13 +222,31 @@ func (m MandatoryItem) DueLabel(month time.Month) string {
 		return joinDays(parts) + "." + strconv.Itoa(int(month))
 	}
 	if m.Due != nil && m.Due.Day > 0 {
-		prefix := ""
-		if m.Due.Approximate {
-			prefix = "~"
-		}
-		return prefix + strconv.Itoa(m.Due.Day) + "." + strconv.Itoa(int(month))
+		return formatDay(m.Due.Day, m.Due.Approximate, month)
 	}
 	return "дата ?"
+}
+
+func (m MandatoryItem) periodDue(kind budget.Kind, month time.Month) (string, bool) {
+	var day *DueDay
+	switch kind {
+	case budget.KindSalary:
+		day = m.DueSalary
+	case budget.KindAdvance:
+		day = m.DueAdvance
+	}
+	if day != nil && day.Day > 0 {
+		return formatDay(day.Day, day.Approximate, month), true
+	}
+	return "", false
+}
+
+func formatDay(day int, approx bool, month time.Month) string {
+	prefix := ""
+	if approx {
+		prefix = "~"
+	}
+	return prefix + strconv.Itoa(day) + "." + strconv.Itoa(int(month))
 }
 
 func (f BudgetFile) paid(status string) bool {

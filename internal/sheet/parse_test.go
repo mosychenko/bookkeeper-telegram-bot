@@ -13,6 +13,10 @@ func TestParseDateAndMoney(t *testing.T) {
 	if !ok || !got.Equal(time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)) {
 		t.Fatalf("дата %v %v", got, ok)
 	}
+	got, ok = parseDate("2026-05-01 13:12")
+	if !ok || !got.Equal(time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)) {
+		t.Fatalf("дата со временем %v %v", got, ok)
+	}
 	want := time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)
 	serial := int(want.Sub(time.Date(1899, 12, 30, 0, 0, 0, 0, time.UTC)).Hours() / 24)
 	got, ok = parseDate(strconv.Itoa(serial))
@@ -81,14 +85,10 @@ func TestHeadersAndColumnMapping(t *testing.T) {
 func TestAssembleFollowsPlanColumnAndCover(t *testing.T) {
 	bf := BudgetFile{
 		Mandatory: []MandatoryItem{
-			{ID: "subs", Name: "Подписки", Category: "Подписки", Period: "salary", AmountDefault: 1000, Due: &struct {
-				Day         int  `yaml:"day"`
-				Approximate bool `yaml:"approximate"`
-			}{Day: 1}},
-			{ID: "school", Name: "Школа", Category: "Школа", Period: "salary", AmountDefault: 58000, Due: &struct {
-				Day         int  `yaml:"day"`
-				Approximate bool `yaml:"approximate"`
-			}{Day: 6, Approximate: true}},
+			{ID: "subs", Name: "Подписки", Category: "Подписки", Period: "salary", AmountDefault: 1000, Due: &DueDay{Day: 1}},
+			{ID: "school", Name: "Школа", Category: "Школа", Period: "salary", AmountDefault: 58000, Due: &DueDay{Day: 6, Approximate: true}},
+			// A blank plan cell must not invent this default into the period.
+			{ID: "inet", Name: "Интернет", Category: "Интернет", AmountDefault: 999},
 		},
 		Flexible:         []FlexibleItem{{Category: "Продукты"}, {Category: "Кафе"}},
 		PaidStatusValues: []string{"оплачено"},
@@ -113,7 +113,7 @@ func TestAssembleFollowsPlanColumnAndCover(t *testing.T) {
 		{"Кафе", "8000", "3000", "1000"},
 		{"Зарплата", "270000", "90000", ""},
 		{"Подписки", "1000", "", "990"},
-		{"Школа", "", "", ""},
+		{"Школа", "58000", "", ""},
 	}
 	prev := [][]string{
 		{"Категория", "С зарплаты", "С аванса", "Факт"},
@@ -147,6 +147,11 @@ func TestAssembleFollowsPlanColumnAndCover(t *testing.T) {
 	}
 	if school.Amount != 58000 || school.Due != "~6.11" {
 		t.Fatalf("школа %+v", school)
+	}
+	for _, p := range in.Mandatory {
+		if p.Name == "Интернет" {
+			t.Fatalf("пустая ячейка не должна подставлять amount_default: %+v", p)
+		}
 	}
 	if !subs.Paid || subs.PaidNote != "990 ₽ Яндекс Плюс" || subs.Due != "1.11" {
 		t.Fatalf("подписки %+v", subs)

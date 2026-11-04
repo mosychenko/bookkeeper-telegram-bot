@@ -20,6 +20,14 @@ type FixtureFile struct {
 	Paid           map[string]struct {
 		Note string `yaml:"note"`
 	} `yaml:"paid"`
+	// Payments is the approved prototype list. It does not follow the live
+	// sheet: the sheet splits plans across two columns and uses other names.
+	Payments []struct {
+		ID     string `yaml:"id"`
+		Name   string `yaml:"name"`
+		Amount int64  `yaml:"amount"`
+		Due    string `yaml:"due"`
+	} `yaml:"payments"`
 	Flexible []struct {
 		Category  string `yaml:"category"`
 		Fact      int64  `yaml:"fact"`
@@ -54,20 +62,31 @@ func LoadFixture(budgetPath, fixturePath string) (budget.Input, error) {
 	}
 
 	var mandatory []budget.Payment
-	for _, item := range bf.ForPeriod(period.Kind) {
-		if item.Optional && item.AmountDefault == 0 {
-			continue
+	if len(fx.Payments) > 0 {
+		for _, item := range fx.Payments {
+			p := budget.Payment{Name: item.Name, Amount: item.Amount, Due: item.Due}
+			if note, ok := fx.Paid[item.ID]; ok {
+				p.Paid = true
+				p.PaidNote = note.Note
+			}
+			mandatory = append(mandatory, p)
 		}
-		p := budget.Payment{
-			Name:   item.Name,
-			Amount: item.AmountDefault,
-			Due:    item.DueLabel(period.Month),
+	} else {
+		for _, item := range bf.ForPeriod(period.Kind) {
+			if item.Optional && item.AmountDefault == 0 {
+				continue
+			}
+			p := budget.Payment{
+				Name:   item.Name,
+				Amount: item.AmountDefault,
+				Due:    item.DueLabel(period.Month, period.Kind),
+			}
+			if note, ok := fx.Paid[item.ID]; ok {
+				p.Paid = true
+				p.PaidNote = note.Note
+			}
+			mandatory = append(mandatory, p)
 		}
-		if note, ok := fx.Paid[item.ID]; ok {
-			p.Paid = true
-			p.PaidNote = note.Note
-		}
-		mandatory = append(mandatory, p)
 	}
 
 	flexible := make([]budget.Flex, 0, len(fx.Flexible))

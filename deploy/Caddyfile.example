@@ -1,4 +1,0 @@
-# Подставьте свой домен. Сервис приложения в compose называется app.
-budget.example.com {
-	reverse_proxy app:8080
-}

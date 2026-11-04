@@ -3,9 +3,8 @@ package sheet
 import "fmt"
 
 // Mapping is the only place that knows which tab and column is which.
-// Monthly columns are a draft: the maintainer described the operations
-// sheet precisely and the monthly sheets only by meaning. Check sheets.yaml
-// against the real workbook before trusting sheets mode.
+// It follows the live «Бюджет» workbook: two header rows on a monthly
+// tab, plan-from-salary in C, plan-from-advance in D, fact in E.
 type Mapping struct {
 	Operations    OperationsMap `yaml:"operations"`
 	Monthly       MonthlyMap    `yaml:"monthly"`
@@ -28,10 +27,39 @@ type MonthlyMap struct {
 	Columns       map[string]string `yaml:"columns"`
 	ExpectHeaders map[string]string `yaml:"expect_headers"`
 	ReadRange     string            `yaml:"read_range"`
-	IncomeRows    struct {
+	// IncomeRows is the legacy lookup by category name. The live sheet
+	// keeps planned income on one row (income_plan) and actual income in
+	// the I/J block (income_actual). Those win when their row is set.
+	IncomeRows struct {
 		Salary  string `yaml:"salary"`
 		Advance string `yaml:"advance"`
 	} `yaml:"income_rows"`
+	IncomePlan   IncomePlan   `yaml:"income_plan"`
+	IncomeActual IncomeActual `yaml:"income_actual"`
+}
+
+// IncomePlan is the «Доход» row: salary plan and advance plan are two
+// columns of the same row, not two category rows.
+type IncomePlan struct {
+	Row           int    `yaml:"row"`
+	Label         string `yaml:"label"`
+	LabelColumn   string `yaml:"label_column"`
+	SalaryColumn  string `yaml:"salary_column"`
+	AdvanceColumn string `yaml:"advance_column"`
+}
+
+// IncomeActual is the «Доход факт (выписка)» block.
+type IncomeActual struct {
+	Salary  IncomeCell `yaml:"salary"`
+	Advance IncomeCell `yaml:"advance"`
+}
+
+// IncomeCell is one labelled amount, for example J3 next to I3.
+type IncomeCell struct {
+	Row         int    `yaml:"row"`
+	Column      string `yaml:"column"`
+	Label       string `yaml:"label"`
+	LabelColumn string `yaml:"label_column"`
 }
 
 type TypeNames struct {

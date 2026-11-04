@@ -67,7 +67,26 @@ func TestSheetsConfigLoads(t *testing.T) {
 	if m.Operations.Columns["budget_category"] != "J" || m.Operations.Columns["fact"] != "K" {
 		t.Fatalf("колонки операций %+v", m.Operations.Columns)
 	}
-	if m.Monthly.Columns["plan_salary"] == "" || m.Monthly.IncomeRows.Salary == "" {
-		t.Fatal("черновик месячного листа должен быть заполнен, даже если его ещё сверять")
+	if m.Operations.ExpectHeaders["K"] != "Расход (для Факт)" || m.Operations.ExpectHeaders["M"] != "Копилка (движение)" {
+		t.Fatalf("заголовки операций %+v", m.Operations.ExpectHeaders)
+	}
+	if m.Monthly.Columns["plan_salary"] != "C" || m.Monthly.Columns["plan_advance"] != "D" || m.Monthly.Columns["fact"] != "E" {
+		t.Fatalf("колонки месяца %+v", m.Monthly.Columns)
+	}
+	if m.Monthly.IncomePlan.Row != 3 || m.Monthly.IncomePlan.SalaryColumn != "C" || m.Monthly.IncomePlan.AdvanceColumn != "D" {
+		t.Fatalf("плановый доход %+v", m.Monthly.IncomePlan)
+	}
+	if m.Monthly.FirstDataRow != 5 || m.Monthly.ReadRange != "A1:J44" {
+		t.Fatalf("диапазон месяца %+v", m.Monthly)
+	}
+	if m.Monthly.IncomeActual.Salary.Column != "J" || m.Monthly.IncomeActual.Advance.Row != 4 {
+		t.Fatalf("фактический доход %+v", m.Monthly.IncomeActual)
+	}
+	bf, err := LoadBudget(filepath.Join(repoRoot(t), "config", "budget.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bf.Income.Advance != 250000 || len(bf.PaidStatusValues) != 1 || bf.PaidStatusValues[0] != "Выполнено" {
+		t.Fatalf("настройки бюджета %+v %v", bf.Income, bf.PaidStatusValues)
 	}
 }
