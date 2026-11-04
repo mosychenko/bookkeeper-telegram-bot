@@ -15,6 +15,54 @@ paid:
   subs:
     note: "990 ₽ Яндекс Плюс"
 
+# Список прототипа. Живой лист делит суммы по колонкам C и D и называет
+# строки иначе, поэтому фикстура не читает config/budget.yaml как платёжку.
+payments:
+  - id: savings
+    name: "Копилка 10%"
+    amount: 52000
+    due: "5.11"
+  - id: school
+    name: "Школа"
+    amount: 58000
+    due: "~6.11"
+  - id: mobile
+    name: "Мобильная связь"
+    amount: 1500
+    due: "~7.11"
+  - id: mortgage
+    name: "Ипотека + страховка"
+    amount: 47785
+    due: "~10.11"
+  - id: therapy
+    name: "Психотерапевт"
+    amount: 15000
+    due: "11 и 18.11"
+  - id: premises
+    name: "Кредит за помещение"
+    amount: 27808
+    due: "~12.11"
+  - id: utilities
+    name: "Коммунальные"
+    amount: 3173
+    due: "~13.11"
+  - id: wife_card
+    name: "Кредитка Женя"
+    amount: 11500
+    due: "дата ?"
+  - id: boxing
+    name: "Бокс Женя"
+    amount: 4000
+    due: "дата ?"
+  - id: pocket
+    name: "Карманные детям"
+    amount: 2000
+    due: "дата ?"
+  - id: subs
+    name: "Подписки"
+    amount: 1000
+    due: "1.11"
+
 flexible:
   - category: "Продукты"
     fact: 0

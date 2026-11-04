@@ -1,139 +1,185 @@
-# Обязательные платежи и гибкие статьи.
+# Обязательные, гибкие и редкие статьи.
+# Классификация от ведущего таблицы, лист «Ноябрь», 2026-11-04.
 #
-# Суммы по умолчанию взяты из утверждённого прототипа ноября.
-# В режиме таблицы сумма берётся из месячного листа (колонка плана
-# с зарплаты или с аванса). amount_default используется, только если
-# ячейка пустая, и всегда — в фикстуре.
+# Суммы периода читаются из листа: колонка C это зарплата (5-е),
+# колонка D это аванс (20-е). Пустая ячейка значит «в этом периоде
+# статьи нет». Список periods ограничивает, какие колонки вообще
+# участвуют. Даты из октябрьской выписки. «?» в источнике значит,
+# что дата не задана и на экране будет «дата ?».
 #
-# Даты платежей в таблице ненадёжны, поэтому они заданы здесь.
-# «~» значит «как списывалось в прошлом месяце», это не точный день.
+# Строки 14 «Кредиты:» и 22 «Карманные» это заголовки групп, не статьи.
+# Строка 44 «Сбережения» ниже сумм 5–42 и тоже читается.
+#
+# Не подтверждено, меняется прямо в этом файле:
+# 1. Тип «Образование (курсы)», «Здоровье», «Секции».
+#    Перенесите пункт между mandatory, flexible и rare.
+# 2. «Кредиты Женя»: advance_if_blank. 0 оставляет пустую ячейку листа
+#    (в ноябре пусто). 5000 подставит обычную сумму в период аванса.
+# 3. «Школа»: список periods. Уберите salary или advance, и колонка
+#    C или D не попадёт в период. Сумма по-прежнему из листа.
+#    В ноябре C это 58 000, D это 105 400 (58 000 + 47 400 предоплата
+#    за следующий месяц).
 
 payday:
   salary_day: 5
   advance_day: 20
 
-# Все обязательные из прототипа отнесены к периоду зарплаты (5-19).
-# Если какой-то платёж живёт на авансе 20-го, поставьте period: advance.
-# Это нужно сверить с реальной книгой: прототип показывает их все «до 20.11».
 mandatory:
-  - id: savings
-    name: "Копилка 10%"
-    category: "Копилка"
-    period: salary
-    amount_default: 52000
-    due:
-      day: 5
+  - id: utilities
+    name: "Коммунальные платежи"
+    category: "Коммунальные платежи"
+    periods: [salary, advance]
+    due_salary:
+      day: 13
 
-  - id: school
-    name: "Школа"
-    category: "Школа"
-    period: salary
-    amount_default: 58000
-    due:
-      day: 6
-      approximate: true
+  - id: internet
+    name: "Интернет"
+    category: "Интернет"
+    periods: [advance]
+    due_advance:
+      day: 28
 
   - id: mobile
     name: "Мобильная связь"
     category: "Мобильная связь"
-    period: salary
-    amount_default: 1500
-    due:
+    periods: [salary]
+    due_salary:
       day: 7
-      approximate: true
-
-  - id: mortgage
-    name: "Ипотека + страховка"
-    category: "Ипотека"
-    period: salary
-    amount_default: 47785
-    due:
-      day: 10
-      approximate: true
-
-  - id: therapy
-    name: "Психотерапевт"
-    category: "Психотерапевт"
-    period: salary
-    amount_default: 15000
-    due_days: [11, 18]
-
-  - id: premises
-    name: "Кредит за помещение"
-    category: "Кредит Максим"
-    period: salary
-    amount_default: 27808
-    due:
-      day: 12
-      approximate: true
-
-  - id: utilities
-    name: "Коммунальные"
-    category: "Коммунальные"
-    period: salary
-    amount_default: 3173
-    due:
-      day: 13
-      approximate: true
-
-  - id: wife_card
-    name: "Кредитка Женя"
-    category: "Кредитка Женя"
-    period: salary
-    amount_default: 11500
-    due_text: "дата ?"
-
-  - id: boxing
-    name: "Бокс Женя"
-    category: "Бокс Женя"
-    period: salary
-    amount_default: 4000
-    due_text: "дата ?"
 
   - id: pocket
     name: "Карманные детям"
     category: "Карманные детям"
-    period: salary
-    amount_default: 2000
-    due_text: "дата ?"
+    periods: [salary, advance]
+    due_range: [20, 25]
+
+  - id: school
+    name: "Школа"
+    category: "Школа"
+    # Не подтверждено: разбивка по колонкам. Уберите лишний период.
+    periods: [salary, advance]
+    due_days: [6, 25]
+
+  - id: feed
+    name: "Корм питомцам"
+    category: "Корм питомцам"
+    periods: [advance]
+    due_range: [22, 31]
+
+  - id: therapy
+    name: "Психотерапевт"
+    category: "Психотерапевт"
+    periods: [salary, advance]
+
+  - id: mortgage
+    name: "Ипотека"
+    category: "Ипотека"
+    periods: [salary]
+    # 47 485 списывается 10-го. Страховка 300 входит в эту же строку
+    # и списывается отдельно 23-го, отдельной статьёй не заводится.
+    due_days: [10, 23]
+
+  - id: maxim_loan
+    name: "Кредит Максим"
+    category: "Кредит Максим"
+    periods: [advance]
+    due_advance:
+      day: 26
+
+  - id: wife_card
+    name: "Кредитка Женя"
+    category: "Кредитка Женя"
+    periods: [salary]
+
+  - id: wife_loans
+    name: "Кредиты Женя"
+    category: "Кредиты Женя"
+    # Не подтверждено: 0 или 5000. Сейчас 0, как пустая ячейка ноября.
+    periods: [advance]
+    advance_if_blank: 0
+
+  - id: premises
+    name: "Помещение"
+    category: "Помещение"
+    periods: [salary]
+    due_salary:
+      day: 12
+
+  - id: mom
+    name: "Маме"
+    category: "Маме"
+    periods: [advance]
+
+  - id: abika
+    name: "Абика"
+    category: "Абика"
+    # Долг 15 000, плана в ноябре нет. Появится в том периоде,
+    # где в листе будет сумма. Дата неизвестна.
+
+  - id: auto
+    name: "Авто"
+    category: "Авто"
+    periods: [advance]
+    due_text: "по факту"
 
   - id: subs
     name: "Подписки"
     category: "Подписки"
-    period: salary
-    amount_default: 1000
-    due:
-      day: 1
+    periods: [salary, advance]
+    due_range: [20, 23]
 
-  # В прототипе интернета нет. Строка появится, когда в месячном листе
-  # будет ненулевая сумма. Имя категории и период нужно сверить.
-  - id: internet
-    name: "Интернет"
-    category: "Интернет"
-    period: salary
-    amount_default: 0
-    optional: true
+  - id: boxing
+    name: "Бокс Женя"
+    category: "Бокс Женя"
+    periods: [salary]
+
+  # Не подтверждено: тип статьи. Чтобы сделать гибкой или редкой,
+  # перенесите блок в flexible или rare и оставьте operations_name.
+  - id: courses
+    name: "Образование (курсы)"
+    category: "Образование (курсы)"
+    operations_name: "Образование"
+    periods: [advance]
+    due_advance:
+      day: 20
+
+  - id: savings
+    name: "Сбережения (Копилка 10%)"
+    category: "Сбережения (Копилка 10%)"
+    periods: [salary]
 
 flexible:
   - category: "Продукты"
-  - category: "Прочее"
+  - category: "Бизнес"
   - category: "Кафе"
-  - category: "Курилка"
+  - category: "Развлечения"
+  - category: "Бытовая химия"
+  # Не подтверждено: тип. Перенесите в mandatory или rare.
   - category: "Здоровье"
   - category: "Транспорт"
-  - category: "Авто"
-  - category: "Подарки"
-  - category: "Корм питомцам"
+  - category: "Красота"
+  - category: "Одежда"
+  # Не подтверждено: тип. Перенесите в mandatory или rare.
+  - category: "Секции"
+  - category: "Расходы на питомцев прочее"
+  - category: "Дети прочее"
+  - category: "Курилка"
+  - category: "Прочее"
 
-# Подстраховка, если в месячном листе нет строки прихода.
-# Аванс в прототипе не задан: 0, пока не свернете с книгой.
+# Редкие статьи считаются как гибкие в темпе и в «откуда взять».
+# На экран попадают только если в этом периоде есть план или факт.
+rare:
+  - category: "Концерты"
+  - category: "Подарки"
+  - category: "Дизайн квартиры"
+  - category: "Путешествия"
+
+# Запас, если ячейка планового дохода пустая. В ноябре и октябре
+# C3 = 270 000, D3 = 250 000, так что запас не используется.
 income_defaults:
   salary: 270000
-  advance: 0
+  advance: 250000
 
-# Какие значения колонки «Статус» листа «Операции» считать оплатой.
-# Написание нужно сверить: здесь только разумные варианты.
+# Колонка «Статус» листа «Операции». «Выполнено» это оплачено.
+# «В обработке» и «Вручную» оплатой не считаются.
 paid_status_values:
-  - "оплачено"
-  - "Оплачено"
-  - "проведено"
+  - "Выполнено"

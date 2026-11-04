@@ -1,0 +1,26 @@
+# Боевой слой: Caddy получает сертификат Let's Encrypt сам.
+# Запуск: docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+# Скрипт deploy/vps-install.sh делает это сам.
+
+services:
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      DOMAIN: ${DOMAIN:?укажите DOMAIN}
+      ACME_EMAIL: ${ACME_EMAIL:?укажите ACME_EMAIL}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      app:
+        condition: service_healthy
+
+volumes:
+  caddy_data:
+  caddy_config:

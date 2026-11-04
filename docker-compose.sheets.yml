@@ -1,0 +1,9 @@
+# Подключается только при DATA_SOURCE=sheets.
+# GOOGLE_SA_FILE это путь на хосте, вне репозитория.
+
+services:
+  app:
+    environment:
+      GOOGLE_APPLICATION_CREDENTIALS: /run/secrets/sa.json
+    volumes:
+      - ${GOOGLE_SA_FILE:?укажите GOOGLE_SA_FILE, путь к JSON вне репозитория}:/run/secrets/sa.json:ro

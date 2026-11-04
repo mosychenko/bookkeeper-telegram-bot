@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 )
 
 // Operation is one bank row. Money is whole rubles.
@@ -89,41 +90,101 @@ func parseMonthly(grid [][]string, m Mapping) map[string]CatRow {
 	}
 	for i := start; i < len(grid); i++ {
 		row := grid[i]
-		name := cellAt(row, m, "month", "category")
-		if name == "" {
+		name := monthlyName(row, m)
+		if name == "" || strings.HasSuffix(name, ":") {
 			continue
 		}
 		cr := CatRow{Name: name}
 		cr.PlanSalary = moneyPtr(cellAt(row, m, "month", "plan_salary"))
 		cr.PlanAdvance = moneyPtr(cellAt(row, m, "month", "plan_advance"))
 		cr.Fact = moneyPtr(cellAt(row, m, "month", "fact"))
+		// «Карманные» is a section title above the pocket rows. It has no
+		// amounts of its own. «Карманные детям» is the real category.
+		if name == "Карманные" && cr.PlanSalary == nil && cr.PlanAdvance == nil && (cr.Fact == nil || *cr.Fact == 0) {
+			continue
+		}
 		out[norm(name)] = cr
 	}
 	return out
+}
+
+func monthlyName(row []string, m Mapping) string {
+	a := normalizeWS(cellAt(row, m, "month", "category"))
+	if a != "" {
+		a = strings.TrimSpace(strings.TrimPrefix(a, "-"))
+		return normalizeWS(a)
+	}
+	if m.Monthly.Columns["subcategory"] == "" {
+		return ""
+	}
+	return normalizeWS(cellAt(row, m, "month", "subcategory"))
+}
+
+func normalizeWS(s string) string {
+	return strings.Join(strings.Fields(s), " ")
 }
 
 func checkHeaders(grid [][]string, headerRow int, expect map[string]string) error {
 	if len(expect) == 0 {
 		return nil
 	}
-	if headerRow < 1 || len(grid) < headerRow {
-		return fmt.Errorf("нет строки заголовков %d", headerRow)
-	}
-	row := grid[headerRow-1]
-	for letter, want := range expect {
-		idx, err := colIndex(letter)
+	for key, want := range expect {
+		rowNum, idx, err := headerPos(key, headerRow)
 		if err != nil {
 			return err
 		}
+		if rowNum < 1 || len(grid) < rowNum {
+			return fmt.Errorf("нет строки заголовка %s", key)
+		}
+		row := grid[rowNum-1]
 		got := ""
 		if idx < len(row) {
 			got = strings.TrimSpace(row[idx])
 		}
 		if got != strings.TrimSpace(want) {
-			return fmt.Errorf("колонка %s: в таблице %q, в настройках ожидается %q", letter, got, strings.TrimSpace(want))
+			return fmt.Errorf("ячейка %s: в таблице %q, в настройках ожидается %q", key, got, strings.TrimSpace(want))
 		}
 	}
 	return nil
+}
+
+// headerPos reads either a column letter ("K", checked on headerRow) or a
+// cell ("C2") so a monthly tab can have two header rows.
+func headerPos(key string, headerRow int) (int, int, error) {
+	key = strings.TrimSpace(key)
+	if key == "" {
+		return 0, 0, fmt.Errorf("пустой ключ заголовка")
+	}
+	i := 0
+	for i < len(key) && (key[i] < '0' || key[i] > '9') {
+		i++
+	}
+	col, err := colIndex(key[:i])
+	if err != nil {
+		return 0, 0, err
+	}
+	if i == len(key) {
+		if headerRow < 1 {
+			return 0, 0, fmt.Errorf("нет строки заголовков")
+		}
+		return headerRow, col, nil
+	}
+	rowNum, err := strconv.Atoi(key[i:])
+	if err != nil || rowNum < 1 {
+		return 0, 0, fmt.Errorf("ячейка %q", key)
+	}
+	return rowNum, col, nil
+}
+
+func gridCell(grid [][]string, row int, col string) string {
+	if row < 1 || row > len(grid) {
+		return ""
+	}
+	idx, err := colIndex(col)
+	if err != nil || idx < 0 || idx >= len(grid[row-1]) {
+		return ""
+	}
+	return grid[row-1][idx]
 }
 
 func cellAt(row []string, m Mapping, group, key string) string {
@@ -172,14 +233,17 @@ func moneyPtr(raw string) *int64 {
 
 func parseMoney(raw string) (int64, bool) {
 	s := strings.TrimSpace(raw)
-	s = strings.ReplaceAll(s, "\u00a0", "")
-	s = strings.ReplaceAll(s, "\u202f", "")
-	s = strings.ReplaceAll(s, " ", "")
 	s = strings.TrimSuffix(s, "₽")
-	s = strings.TrimSuffix(s, "р")
 	s = strings.TrimSuffix(s, "р.")
+	s = strings.TrimSuffix(s, "р")
+	s = strings.Map(func(r rune) rune {
+		if unicode.IsSpace(r) {
+			return -1
+		}
+		return r
+	}, s)
 	s = strings.ReplaceAll(s, ",", ".")
-	if s == "" {
+	if s == "" || s == "-" || s == "—" {
 		return 0, false
 	}
 	f, err := strconv.ParseFloat(s, 64)
@@ -202,6 +266,10 @@ func parseDate(raw string) (time.Time, bool) {
 		"2006-01-02",
 		"02/01/2006",
 		"2/1/2006",
+		"2006-01-02 15:04:05",
+		"2006-01-02 15:04",
+		"02.01.2006 15:04:05",
+		"02.01.2006 15:04",
 	}
 	for _, layout := range layouts {
 		if t, err := time.ParseInLocation(layout, s, time.UTC); err == nil {
