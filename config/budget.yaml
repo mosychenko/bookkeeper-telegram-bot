@@ -1,0 +1,139 @@
+# Обязательные платежи и гибкие статьи.
+#
+# Суммы по умолчанию взяты из утверждённого прототипа ноября.
+# В режиме таблицы сумма берётся из месячного листа (колонка плана
+# с зарплаты или с аванса). amount_default используется, только если
+# ячейка пустая, и всегда — в фикстуре.
+#
+# Даты платежей в таблице ненадёжны, поэтому они заданы здесь.
+# «~» значит «как списывалось в прошлом месяце», это не точный день.
+
+payday:
+  salary_day: 5
+  advance_day: 20
+
+# Все обязательные из прототипа отнесены к периоду зарплаты (5-19).
+# Если какой-то платёж живёт на авансе 20-го, поставьте period: advance.
+# Это нужно сверить с реальной книгой: прототип показывает их все «до 20.11».
+mandatory:
+  - id: savings
+    name: "Копилка 10%"
+    category: "Копилка"
+    period: salary
+    amount_default: 52000
+    due:
+      day: 5
+
+  - id: school
+    name: "Школа"
+    category: "Школа"
+    period: salary
+    amount_default: 58000
+    due:
+      day: 6
+      approximate: true
+
+  - id: mobile
+    name: "Мобильная связь"
+    category: "Мобильная связь"
+    period: salary
+    amount_default: 1500
+    due:
+      day: 7
+      approximate: true
+
+  - id: mortgage
+    name: "Ипотека + страховка"
+    category: "Ипотека"
+    period: salary
+    amount_default: 47785
+    due:
+      day: 10
+      approximate: true
+
+  - id: therapy
+    name: "Психотерапевт"
+    category: "Психотерапевт"
+    period: salary
+    amount_default: 15000
+    due_days: [11, 18]
+
+  - id: premises
+    name: "Кредит за помещение"
+    category: "Кредит Максим"
+    period: salary
+    amount_default: 27808
+    due:
+      day: 12
+      approximate: true
+
+  - id: utilities
+    name: "Коммунальные"
+    category: "Коммунальные"
+    period: salary
+    amount_default: 3173
+    due:
+      day: 13
+      approximate: true
+
+  - id: wife_card
+    name: "Кредитка Женя"
+    category: "Кредитка Женя"
+    period: salary
+    amount_default: 11500
+    due_text: "дата ?"
+
+  - id: boxing
+    name: "Бокс Женя"
+    category: "Бокс Женя"
+    period: salary
+    amount_default: 4000
+    due_text: "дата ?"
+
+  - id: pocket
+    name: "Карманные детям"
+    category: "Карманные детям"
+    period: salary
+    amount_default: 2000
+    due_text: "дата ?"
+
+  - id: subs
+    name: "Подписки"
+    category: "Подписки"
+    period: salary
+    amount_default: 1000
+    due:
+      day: 1
+
+  # В прототипе интернета нет. Строка появится, когда в месячном листе
+  # будет ненулевая сумма. Имя категории и период нужно сверить.
+  - id: internet
+    name: "Интернет"
+    category: "Интернет"
+    period: salary
+    amount_default: 0
+    optional: true
+
+flexible:
+  - category: "Продукты"
+  - category: "Прочее"
+  - category: "Кафе"
+  - category: "Курилка"
+  - category: "Здоровье"
+  - category: "Транспорт"
+  - category: "Авто"
+  - category: "Подарки"
+  - category: "Корм питомцам"
+
+# Подстраховка, если в месячном листе нет строки прихода.
+# Аванс в прототипе не задан: 0, пока не свернете с книгой.
+income_defaults:
+  salary: 270000
+  advance: 0
+
+# Какие значения колонки «Статус» листа «Операции» считать оплатой.
+# Написание нужно сверить: здесь только разумные варианты.
+paid_status_values:
+  - "оплачено"
+  - "Оплачено"
+  - "проведено"

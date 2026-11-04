@@ -1,0 +1,24 @@
+services:
+  app:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      APP_ENV: ${APP_ENV:-prod}
+      DATA_SOURCE: ${DATA_SOURCE:-fixture}
+      ADDR: ":8080"
+      CACHE_TTL: ${CACHE_TTL:-3m}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      TELEGRAM_ALLOWED_USER_IDS: ${TELEGRAM_ALLOWED_USER_IDS:-}
+      WEBAPP_URL: ${WEBAPP_URL:-}
+      BUDGET_SPREADSHEET_ID: ${BUDGET_SPREADSHEET_ID:-1n_Yp3gHkX-jNZGD5Mn4IYxPtAixZhF6xyXNVurUZrBI}
+      GOOGLE_SERVICE_ACCOUNT_JSON: ${GOOGLE_SERVICE_ACCOUNT_JSON:-}
+      GOOGLE_APPLICATION_CREDENTIALS: ${GOOGLE_APPLICATION_CREDENTIALS:-}
+      TZ: Europe/Moscow
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:8080/api/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 15s
