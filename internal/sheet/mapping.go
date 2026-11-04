@@ -1,0 +1,118 @@
+package sheet
+
+import "fmt"
+
+// Mapping is the only place that knows which tab and column is which.
+// Monthly columns are a draft: the maintainer described the operations
+// sheet precisely and the monthly sheets only by meaning. Check sheets.yaml
+// against the real workbook before trusting sheets mode.
+type Mapping struct {
+	Operations    OperationsMap `yaml:"operations"`
+	Monthly       MonthlyMap    `yaml:"monthly"`
+	Types         TypeNames     `yaml:"types"`
+	FactSource    string        `yaml:"fact_source"`     // monthly | operations
+	LastMonthFact string        `yaml:"last_month_fact"` // monthly | operations
+}
+
+type OperationsMap struct {
+	Sheet         string            `yaml:"sheet"`
+	HeaderRow     int               `yaml:"header_row"`
+	Columns       map[string]string `yaml:"columns"`
+	ExpectHeaders map[string]string `yaml:"expect_headers"`
+	ReadColumns   string            `yaml:"read_columns"`
+}
+
+type MonthlyMap struct {
+	HeaderRow     int               `yaml:"header_row"`
+	FirstDataRow  int               `yaml:"first_data_row"`
+	Columns       map[string]string `yaml:"columns"`
+	ExpectHeaders map[string]string `yaml:"expect_headers"`
+	ReadRange     string            `yaml:"read_range"`
+	IncomeRows    struct {
+		Salary  string `yaml:"salary"`
+		Advance string `yaml:"advance"`
+	} `yaml:"income_rows"`
+}
+
+type TypeNames struct {
+	Expense  string `yaml:"expense"`
+	Excluded string `yaml:"excluded"`
+	Income   string `yaml:"income"`
+	Loan     string `yaml:"loan"`
+	Cash     string `yaml:"cash"`
+}
+
+func LoadMapping(path string) (Mapping, error) {
+	var m Mapping
+	if err := readYAML(path, &m); err != nil {
+		return m, err
+	}
+	if m.FactSource == "" {
+		m.FactSource = "monthly"
+	}
+	if m.LastMonthFact == "" {
+		m.LastMonthFact = "monthly"
+	}
+	if err := m.Validate(); err != nil {
+		return m, err
+	}
+	return m, nil
+}
+
+func (m Mapping) normalized() Mapping {
+	if m.FactSource == "" {
+		m.FactSource = "monthly"
+	}
+	if m.LastMonthFact == "" {
+		m.LastMonthFact = "monthly"
+	}
+	return m
+}
+
+func (m Mapping) Validate() error {
+	if m.Operations.Sheet == "" {
+		return fmt.Errorf("operations.sheet пуст")
+	}
+	if m.Operations.HeaderRow < 1 {
+		return fmt.Errorf("operations.header_row")
+	}
+	for _, key := range []string{"date", "amount", "type", "budget_category", "fact", "status", "description"} {
+		if m.Operations.Columns[key] == "" {
+			return fmt.Errorf("operations.columns.%s не задана", key)
+		}
+	}
+	if m.Monthly.HeaderRow < 1 || m.Monthly.FirstDataRow <= m.Monthly.HeaderRow {
+		return fmt.Errorf("monthly: строки заголовка и данных")
+	}
+	for _, key := range []string{"category", "plan_salary", "plan_advance", "fact"} {
+		if m.Monthly.Columns[key] == "" {
+			return fmt.Errorf("monthly.columns.%s не задана — сверьте config/sheets.yaml с книгой", key)
+		}
+	}
+	if m.FactSource != "monthly" && m.FactSource != "operations" {
+		return fmt.Errorf("fact_source: %s", m.FactSource)
+	}
+	if m.LastMonthFact != "monthly" && m.LastMonthFact != "operations" {
+		return fmt.Errorf("last_month_fact: %s", m.LastMonthFact)
+	}
+	if m.Operations.ReadColumns == "" {
+		return fmt.Errorf("operations.read_columns пуст")
+	}
+	if m.Monthly.ReadRange == "" {
+		return fmt.Errorf("monthly.read_range пуст")
+	}
+	return nil
+}
+
+func (m Mapping) col(group, key string) (int, error) {
+	var letter string
+	switch group {
+	case "ops":
+		letter = m.Operations.Columns[key]
+	case "month":
+		letter = m.Monthly.Columns[key]
+	default:
+		return 0, fmt.Errorf("группа %s", group)
+	}
+	return colIndex(letter)
+}

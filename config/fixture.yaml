@@ -1,0 +1,50 @@
+# Утверждённый прототип экрана: ноябрь, данные на 1.11, период зарплаты 5-19.
+# Это не выгрузка таблицы. Боевой режим (DATA_SOURCE=sheets) эти числа не использует.
+# Планы гибких статей сознательно не заданы: в прототипе стоит «не задан».
+
+as_of: 2026-11-01
+year: 2026
+month: 11
+period: salary
+
+planned_income: 270000
+last_income: 252526
+last_flex_per_day: 3891
+
+paid:
+  subs:
+    note: "990 ₽ Яндекс Плюс"
+
+flexible:
+  - category: "Продукты"
+    fact: 0
+    last_month: 38161
+  - category: "Прочее"
+    fact: 0
+    last_month: 34667
+  - category: "Кафе"
+    fact: 209
+    last_month: 28159
+  - category: "Курилка"
+    fact: 0
+    last_month: 7966
+  - category: "Здоровье"
+    fact: 0
+    last_month: 5763
+  - category: "Транспорт"
+    fact: 0
+    last_month: 4040
+
+# Подпись «Школа (вкл. предоплату ноября)» есть только в прототипе.
+# Из таблицы придёт имя категории, без этой ремарки.
+top:
+  - name: "Школа (вкл. предоплату ноября)"
+    amount: 152800
+  - name: "Ипотека"
+    amount: 47785
+  - name: "Продукты"
+    amount: 38161
+  - name: "Подарки"
+    amount: 37598
+  - name: "Прочее"
+    amount: 34667
