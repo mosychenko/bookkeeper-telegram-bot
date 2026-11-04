@@ -113,7 +113,7 @@ func TestNovemberLayout(t *testing.T) {
 	if utilities.Due != "13.11" || mortgage.Due != "10 и 23.11" || mobile.Due != "7.11" {
 		t.Fatalf("даты: коммунальные %q ипотека %q связь %q", utilities.Due, mortgage.Due, mobile.Due)
 	}
-	var cafe budget.Flex
+	var cafe, courses budget.Flex
 	var products bool
 	for _, f := range in.Flexible {
 		switch f.Name {
@@ -121,12 +121,17 @@ func TestNovemberLayout(t *testing.T) {
 			cafe = f
 		case "Продукты":
 			products = true
+		case "Образование (курсы)":
+			courses = f
 		case "Подарки", "Путешествия", "Концерты", "Дизайн квартиры":
 			t.Fatalf("редкая статья без плана и факта периода на экране: %+v", f)
 		}
 	}
 	if cafe.Fact != 209 || cafe.Plan != nil || cafe.LastMonth != 28159 {
 		t.Fatalf("кафе %+v", cafe)
+	}
+	if courses.Plan != nil || courses.Fact != 0 || courses.LastMonth != 7490 {
+		t.Fatalf("образование %+v", courses)
 	}
 	if !products {
 		t.Fatal("продукты с октябрьским фактом должны остаться на экране")
@@ -200,8 +205,9 @@ func TestUnconfirmedKnobs(t *testing.T) {
 			loans = item
 		case "school":
 			school = item
-		case "courses":
-			courses = true
+		}
+		if item.Category == "Образование (курсы)" {
+			t.Fatal("образование должно быть гибким")
 		}
 	}
 	for _, item := range bf.Flexible {
@@ -210,10 +216,12 @@ func TestUnconfirmedKnobs(t *testing.T) {
 			health = true
 		case "Секции":
 			sections = true
+		case "Образование (курсы)":
+			courses = item.OperationsName == "Образование"
 		}
 	}
 	if !courses || !health || !sections {
-		t.Fatal("образование должно быть обязательным, здоровье и секции гибкими")
+		t.Fatal("образование, здоровье и секции должны быть гибкими")
 	}
 	if loans.AdvanceIfBlank != 0 || len(school.Periods) != 2 {
 		t.Fatalf("ручки: кредиты %+v школа %+v", loans.AdvanceIfBlank, school.Periods)
