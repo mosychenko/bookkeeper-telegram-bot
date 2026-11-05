@@ -28,6 +28,14 @@ type BudgetFile struct {
 		Salary  int64 `yaml:"salary"`
 		Advance int64 `yaml:"advance"`
 	} `yaml:"income_defaults"`
+	// SalaryIncomeCategories are the only inflows that count as salary.
+	// Anything else, including «Прочие поступления» and loans, does not.
+	SalaryIncomeCategories []string `yaml:"salary_income_categories"`
+	// ExcludedIncomeCategories never count as free money. Their full
+	// amount is added to the копилка (rent, once the sheet has a name).
+	ExcludedIncomeCategories []string `yaml:"excluded_income_categories"`
+	// SavingsRate is the share of salary income that goes to the копилка.
+	SavingsRate      float64  `yaml:"savings_rate"`
 	PaidStatusValues []string `yaml:"paid_status_values"`
 }
 
@@ -130,7 +138,66 @@ func (f BudgetFile) Validate() error {
 			return fmt.Errorf("%s указана и как обязательная, и как гибкая", m.Name)
 		}
 	}
+	if err := f.validateIncome(); err != nil {
+		return err
+	}
 	return nil
+}
+
+func (f BudgetFile) validateIncome() error {
+	if !f.hasSavings() {
+		return nil
+	}
+	if f.SavingsRate <= 0 || f.SavingsRate > 1 {
+		return fmt.Errorf("savings_rate должен быть от 0 до 1, сейчас %v", f.SavingsRate)
+	}
+	if len(f.SalaryIncomeCategories) == 0 {
+		return fmt.Errorf("salary_income_categories пуст")
+	}
+	seen := map[string]bool{}
+	for _, c := range f.SalaryIncomeCategories {
+		n := norm(c)
+		if n == "" {
+			return fmt.Errorf("пустая категория зарплаты")
+		}
+		if seen[n] {
+			return fmt.Errorf("категория зарплаты %s указана дважды", c)
+		}
+		seen[n] = true
+	}
+	for _, c := range f.ExcludedIncomeCategories {
+		n := norm(c)
+		if n == "" {
+			return fmt.Errorf("пустая исключённая категория дохода")
+		}
+		if seen[n] {
+			return fmt.Errorf("%s указана и как зарплата, и как исключённый доход", c)
+		}
+		seen[n] = true
+	}
+	return nil
+}
+
+func (f BudgetFile) hasSavings() bool {
+	for _, m := range f.Mandatory {
+		if m.ID == "savings" {
+			return true
+		}
+	}
+	return false
+}
+
+func (f BudgetFile) listed(categories []string, name string) bool {
+	n := norm(name)
+	if n == "" {
+		return false
+	}
+	for _, c := range categories {
+		if norm(c) == n {
+			return true
+		}
+	}
+	return false
 }
 
 func addFlex(seen map[string]bool, list []FlexibleItem) error {

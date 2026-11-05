@@ -73,6 +73,23 @@ monthly:
       column: "J"
       label: "Аванс"
       label_column: "I"
+    wife:
+      row: 5
+      column: "J"
+      label: "Доход Женя"
+      label_column: "I"
+    # J6 и J8 читаются только чтобы поймать сдвиг колонки.
+    # В доход периода и в копилку они не входят.
+    other:
+      row: 6
+      column: "J"
+      label: "Прочие поступления"
+      label_column: "I"
+    loan:
+      row: 8
+      column: "J"
+      label: "Заём у мамы (не доход)"
+      label_column: "I"
   expect_headers:
     A1: "Категория"
     B1: "Подкатегории"

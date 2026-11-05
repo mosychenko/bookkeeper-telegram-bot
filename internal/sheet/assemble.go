@@ -85,17 +85,34 @@ func Assemble(now time.Time, bf BudgetFile, mp Mapping, opsGrid, curGrid, prevGr
 		}
 		warns = append(warns, fmt.Sprintf("Приход «%s» в листе не найден, взято %s из настроек.", label, budget.FormatRUB(planned)))
 	}
-	lastIncome, lastKnown, err := actualIncome(prevGrid, mp, period.Kind)
+	lastIncome, lastKnown, _, err := salaryInPeriod(ops, prevGrid, bf, mp, prevPeriod)
 	if err != nil {
 		return budget.Input{}, err
 	}
-	if !actualConfigured(mp, period.Kind) {
+	if !actualConfigured(mp, period.Kind) && !hasSalaryDetail(ops, bf, mp.Types.Income) {
 		lastIncome, lastKnown = incomeFrom(prev, incomeName, planCol)
+	}
+	curSalary, curKnown, curRent, err := salaryInPeriod(ops, curGrid, bf, mp, period)
+	if err != nil {
+		return budget.Input{}, err
 	}
 
 	var mandatory []budget.Payment
 	for _, item := range bf.Mandatory {
 		if !item.allows(period.Kind) {
+			continue
+		}
+		if item.ID == "savings" {
+			amount := savingsAmount(curSalary, curKnown, planned, curRent, bf.SavingsRate)
+			if amount == 0 {
+				continue
+			}
+			p := budget.Payment{
+				Name:   item.Name,
+				Amount: amount,
+				Due:    item.DueLabel(period.Month, period.Kind),
+			}
+			mandatory = append(mandatory, p)
 			continue
 		}
 		amount, fromSheet := amountFromRow(cur[norm(item.Category)], planCol)

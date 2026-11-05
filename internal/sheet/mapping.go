@@ -49,9 +49,14 @@ type IncomePlan struct {
 }
 
 // IncomeActual is the «Доход факт (выписка)» block.
+// Other and Loan are checked so a shifted column is noticed, and then ignored:
+// «Прочие поступления» and «Заём у мамы» are not salary.
 type IncomeActual struct {
 	Salary  IncomeCell `yaml:"salary"`
 	Advance IncomeCell `yaml:"advance"`
+	Wife    IncomeCell `yaml:"wife"`
+	Other   IncomeCell `yaml:"other"`
+	Loan    IncomeCell `yaml:"loan"`
 }
 
 // IncomeCell is one labelled amount, for example J3 next to I3.

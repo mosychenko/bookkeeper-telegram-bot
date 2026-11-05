@@ -80,7 +80,7 @@ func TestNovemberLayout(t *testing.T) {
 		"Помещение":                27808,
 		"Подписки":                 1000,
 		"Бокс Женя":                4000,
-		"Сбережения (Копилка 10%)": 52000,
+		"Сбережения (Копилка 10%)": 27000,
 	}
 	absentSalary := []string{"Кредит Максим", "Маме", "Абика", "Кредиты Женя", "Интернет", "Корм питомцам", "Авто", "Образование (курсы)", "Страховка"}
 	assertPayments(t, in.Mandatory, wantSalary, absentSalary)
@@ -132,7 +132,9 @@ func TestNovemberLayout(t *testing.T) {
 		t.Fatal("продукты с октябрьским фактом должны остаться на экране")
 	}
 	view := budget.Build(in)
-	if view.Mandatory.Total != 223766 || view.Free != 46234 || view.PerDay != 3082 || view.StatusText != "Впритык" {
+	// В ячейке C44 лежит (C3+D3)/10 = 52 000. Пока зарплата не пришла,
+	// копилка периода это 10% только C3, то есть 27 000.
+	if view.Mandatory.Total != 198766 || view.Free != 71234 || view.PerDay != 4749 || view.StatusText != "Впритык" {
 		t.Fatalf("ноябрь зарплата: обязательные %d свободно %d в день %d статус %s", view.Mandatory.Total, view.Free, view.PerDay, view.StatusText)
 	}
 
@@ -148,18 +150,19 @@ func TestNovemberLayout(t *testing.T) {
 		t.Fatalf("октябрьский аванс %d known %v, ждали J4", adv.LastIncome, adv.LastIncomeKnown)
 	}
 	wantAdvance := map[string]int64{
-		"Коммунальные платежи": 10000,
-		"Интернет":             500,
-		"Карманные детям":      2000,
-		"Школа":                105400,
-		"Корм питомцам":        13000,
-		"Психотерапевт":        15000,
-		"Кредит Максим":        11477,
-		"Маме":                 7500,
-		"Авто":                 10000,
-		"Подписки":             5300,
+		"Коммунальные платежи":     10000,
+		"Интернет":                 500,
+		"Карманные детям":          2000,
+		"Школа":                    105400,
+		"Корм питомцам":            13000,
+		"Психотерапевт":            15000,
+		"Кредит Максим":            11477,
+		"Маме":                     7500,
+		"Авто":                     10000,
+		"Подписки":                 5300,
+		"Сбережения (Копилка 10%)": 25000,
 	}
-	assertPayments(t, adv.Mandatory, wantAdvance, []string{"Помещение", "Ипотека", "Абика", "Кредиты Женя", "Сбережения (Копилка 10%)", "Мобильная связь", "Бокс Женя"})
+	assertPayments(t, adv.Mandatory, wantAdvance, []string{"Помещение", "Ипотека", "Абика", "Кредиты Женя", "Мобильная связь", "Бокс Женя"})
 	var advUtilities, inet, feed, auto, pocket, loan budget.Payment
 	for _, p := range adv.Mandatory {
 		switch p.Name {
@@ -181,7 +184,7 @@ func TestNovemberLayout(t *testing.T) {
 		t.Fatalf("даты аванса: коммунальные %q интернет %q корм %q авто %q карманные %q кредит %q", advUtilities.Due, inet.Due, feed.Due, auto.Due, pocket.Due, loan.Due)
 	}
 	advView := budget.Build(adv)
-	if advView.Mandatory.Total != 180177 {
+	if advView.Mandatory.Total != 205177 {
 		t.Fatalf("обязательные аванса %d", advView.Mandatory.Total)
 	}
 }

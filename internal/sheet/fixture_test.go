@@ -89,4 +89,10 @@ func TestSheetsConfigLoads(t *testing.T) {
 	if bf.Income.Advance != 250000 || len(bf.PaidStatusValues) != 1 || bf.PaidStatusValues[0] != "Выполнено" {
 		t.Fatalf("настройки бюджета %+v %v", bf.Income, bf.PaidStatusValues)
 	}
+	if bf.SavingsRate != 0.10 || len(bf.SalaryIncomeCategories) != 4 || len(bf.ExcludedIncomeCategories) != 0 {
+		t.Fatalf("доход и копилка: ставка %v зарплата %v исключено %v", bf.SavingsRate, bf.SalaryIncomeCategories, bf.ExcludedIncomeCategories)
+	}
+	if m.Monthly.IncomeActual.Wife.Label != "Доход Женя" || m.Monthly.IncomeActual.Other.Label != "Прочие поступления" {
+		t.Fatalf("блок факта дохода %+v", m.Monthly.IncomeActual)
+	}
 }
