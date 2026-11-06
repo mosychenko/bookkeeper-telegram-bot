@@ -1,9 +1,13 @@
 # syntax=docker/dockerfile:1
 
-FROM node:22-alpine AS web
+# node:22-alpine makes `npm ci` abort with "Exit handler never called!"
+# (https://github.com/npm/cli/issues/8974), including Apple Silicon builds
+# of linux/amd64. This stage only produces static files; the runtime
+# image below stays Alpine.
+FROM node:22-bookworm-slim AS web
 WORKDIR /src/web
 COPY web/package.json web/package-lock.json ./
-RUN npm ci
+RUN npm ci --no-audit --no-fund
 COPY web/ ./
 RUN npm run build
 
