@@ -87,7 +87,8 @@ fi
 
 install_docker
 check_ports
-compose up -d --build
+require_app_image
+compose up -d --no-build
 
 echo "Готово. Проверка: curl -fsS https://${domain}/api/health"
 echo "В браузере без Telegram будет просьба открыть мини-приложение из бота. Это нормально для первой проверки."

@@ -47,7 +47,7 @@ cd web && npm run build
 docker compose up --build
 ```
 
-Сервис слушает порт 8080. Это локальный запуск без HTTPS. На VPS смотрите раздел «Деплой на VPS»: там Caddy сам получает сертификат.
+Сервис слушает порт 8080. Это локальный запуск без HTTPS. Команда собирает образ на той машине, где она запущена. На VPS смотрите раздел «Деплой на VPS»: там образ приезжает готовым, а Caddy сам получает сертификат.
 
 ## BotFather
 
@@ -81,31 +81,49 @@ DATA_SOURCE=sheets
 
 ## Деплой на VPS
 
-Нужны A-запись домена на IP сервера и свободные порты 80 и 443 (их же открыть в файрволе). На чистом Ubuntu или Debian из каталога репозитория:
+Сервер — Debian 13. Образ собирается на Mac и копируется готовым: на VPS нет сборки npm и Go. Swap для сборки на сервере не нужен. Рабочему контейнеру хватает 1 ГБ.
+
+Сначала A-запись `dozp.ru` на IP сервера. Порты 80 и 443 свободны, их же открыть в файрволе.
+
+На Mac, в том числе на Apple Silicon, из каталога репозитория:
 
 ```bash
-sudo bash deploy/vps-install.sh budget.example.com you@example.com
+bash deploy/push-image.sh user@vps
 ```
 
-Скрипт ставит Docker и плагин Compose, если их нет, проверяет 80 и 443, создаёт `.env` из `.env.example`, пишет домен и `WEBAPP_URL=https://домен`, печатает пустые `TELEGRAM_BOT_TOKEN` и `TELEGRAM_ALLOWED_USER_IDS` и запускает `docker compose up -d --build`. Caddy сам получает сертификат Let's Encrypt. Сертификаты лежат в томе `caddy_data`. Порт приложения на сервере слушает только `127.0.0.1:8080`.
+Скрипт собирает образ с `--platform linux/amd64` и передаёт его командой `docker save | gzip | ssh user@vps 'gunzip | docker load'`. Образ arm64 с Apple Silicon на обычном Debian не запустится, поэтому платформа по умолчанию `linux/amd64`. Имя образа по умолчанию `dengi:latest`. Явно:
+
+```bash
+bash deploy/push-image.sh user@vps --platform linux/amd64 --image dengi:latest
+```
+
+К моменту загрузки на сервере уже нужен Docker: приём образа выполняет `docker load`. Если Docker ещё не стоит, скрипт установки ниже поставит его и остановится, пока образ не приедет с Mac.
+
+На Debian 13, из каталога репозитория:
+
+```bash
+sudo bash deploy/vps-install.sh dozp.ru you@example.com
+```
+
+Скрипт ставит Docker и плагин Compose, если их нет, проверяет 80 и 443, создаёт `.env` из `.env.example`, пишет домен и `WEBAPP_URL=https://dozp.ru`, печатает пустые `TELEGRAM_BOT_TOKEN` и `TELEGRAM_ALLOWED_USER_IDS`. Если образа `dengi:latest` (или значения `APP_IMAGE`) нет, скрипт останавливается и просит сначала запустить `deploy/push-image.sh` на Mac. Контейнеры стартуют из уже загруженного образа, без сборки. Caddy сам получает сертификат Let's Encrypt. Сертификаты лежат в томе `caddy_data`. Порт приложения на сервере слушает только `127.0.0.1:8080`. Каталог `config/` с диска сервера монтируется в контейнер только для чтения. Таблица по-прежнему только читается.
 
 Для первой проверки оставьте `DATA_SOURCE=fixture` (так и стоит в примере). Ключ Google не нужен. Откроется экран прототипа. Без Telegram он попросит открыть мини-приложение из бота.
 
 Проверка:
 
 ```bash
-curl -fsS https://budget.example.com/api/health
+curl -fsS https://dozp.ru/api/health
 ```
 
 Дальше в `.env`: токен, id семьи, `DATA_SOURCE=sheets` и `GOOGLE_SA_FILE` (путь к JSON вне репозитория, например `/root/dengi-sa.json`). Запустите скрипт установки ещё раз.
 
-Обновление:
+Обновление на сервере:
 
 ```bash
 sudo bash deploy/vps-update.sh
 ```
 
-Это `git pull` и пересборка.
+Это `git pull` и перезапуск уже загруженного образа. Так подхватываются compose, Caddyfile и `config/`. Образ приложения скрипт не пересобирает. Новый код и экран сначала отправьте с Mac тем же `deploy/push-image.sh`, затем запустите обновление на сервере.
 
 ## Как читается таблица
 
@@ -133,6 +151,7 @@ sudo bash deploy/vps-update.sh
 | `GOOGLE_SERVICE_ACCOUNT_JSON` | JSON ключа или путь к нему |
 | `GOOGLE_APPLICATION_CREDENTIALS` | путь к JSON ключа на машине, где запущен процесс |
 | `GOOGLE_SA_FILE` | путь к JSON на хосте VPS, вне репозитория |
+| `APP_IMAGE` | тег готового образа, по умолчанию `dengi:latest` |
 | `HTTP_PUBLISH` | публикация порта приложения, на VPS `127.0.0.1:8080` |
 | `APP_ENV` | `prod` или `dev` |
 | `DEV_SKIP_AUTH` | `1` только при `APP_ENV=dev` |
