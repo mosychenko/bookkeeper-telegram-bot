@@ -1,5 +1,8 @@
 services:
   app:
+    # Локально `docker compose up --build` собирает этот образ.
+    # На VPS сборки нет: deploy/push-image.sh загружает готовый тег.
+    image: ${APP_IMAGE:-dengi:latest}
     build: .
     ports:
       # На VPS скрипт пишет HTTP_PUBLISH=127.0.0.1:8080, снаружи остаётся Caddy.

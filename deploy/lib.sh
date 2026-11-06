@@ -22,6 +22,32 @@ set_env() {
   fi
 }
 
+# Имя образа: переменная окружения, затем .env, затем dengi:latest.
+app_image_name() {
+  local image="${APP_IMAGE:-}"
+  if [[ -z "$image" ]]; then
+    image="$(env_val APP_IMAGE)"
+  fi
+  if [[ -z "$image" ]]; then
+    image="dengi:latest"
+  fi
+  printf '%s' "$image"
+}
+
+# На VPS образ должен быть уже загружен. Сборки npm и Go здесь нет.
+require_app_image() {
+  local image
+  image="$(app_image_name)"
+  if ! docker image inspect "$image" >/dev/null 2>&1; then
+    echo "На сервере нет образа ${image}. Сборка npm и Go на VPS не выполняется." >&2
+    echo "Сначала на Mac, из каталога репозитория:" >&2
+    echo "  bash deploy/push-image.sh user@этот-сервер" >&2
+    echo "После загрузки образа запустите этот скрипт снова." >&2
+    exit 1
+  fi
+  echo "Образ ${image} уже на сервере, пересборка не нужна."
+}
+
 compose() {
   local -a args=(-f docker-compose.yml -f docker-compose.prod.yml)
   if [[ "$(env_val DATA_SOURCE)" == "sheets" ]]; then
