@@ -106,7 +106,7 @@ export default function App() {
                   <td className="due">{row.due}</td>
                   <td>
                     {row.paid ? <span className="paid">✓ оплачено</span> : <span className="wait">ожидает</span>}
-                    {row.paid && row.paidNote ? <span className="paid-note">{row.paidNote}</span> : null}
+                    {row.paidNote ? <span className="paid-note">{row.paidNote}</span> : null}
                   </td>
                 </tr>
               ))}
