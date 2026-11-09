@@ -27,6 +27,9 @@ func TestFixtureMatchesPrototype(t *testing.T) {
 	if len(v.Mandatory.Rows) != 11 {
 		t.Fatalf("строк обязательных %d (интернет с нулём не должен попасть на экран)", len(v.Mandatory.Rows))
 	}
+	if v.Mandatory.Rows[0].Name != "Школа" || v.Mandatory.Rows[0].Amount != 58000 {
+		t.Fatalf("первая строка демо %+v", v.Mandatory.Rows[0])
+	}
 	last := v.Mandatory.Rows[len(v.Mandatory.Rows)-1]
 	if last.Name != "Подписки" || !last.Paid || last.PaidNote != "990 ₽ Яндекс Плюс" {
 		t.Fatalf("подписки %+v", last)

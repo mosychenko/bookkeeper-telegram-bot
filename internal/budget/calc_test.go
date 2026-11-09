@@ -96,8 +96,13 @@ func TestPrototypeNovember(t *testing.T) {
 		t.Fatalf("итог обязательных: %+v", v.Mandatory)
 	}
 	// Paid subscriptions still count toward the obligation, as in the prototype.
-	if !v.Mandatory.Rows[len(v.Mandatory.Rows)-1].Paid {
-		t.Fatal("подписки должны быть оплачены")
+	// On screen they sit after every unpaid bill, which are ordered by amount.
+	if v.Mandatory.Rows[0].Name != "Школа" || v.Mandatory.Rows[0].Amount != 58000 {
+		t.Fatalf("первая строка %+v", v.Mandatory.Rows[0])
+	}
+	last := v.Mandatory.Rows[len(v.Mandatory.Rows)-1]
+	if last.Name != "Подписки" || !last.Paid {
+		t.Fatalf("подписки должны быть оплачены и в конце: %+v", last)
 	}
 
 	wantRisk := "В октябре на гибкие траты уходило 3 891 ₽ в день. Если зарплата придёт как в октябре (252 526 ₽), а не 270 000 ₽ по плану, свободно 28 760 ₽, это 1 917 ₽ в день."
@@ -200,6 +205,35 @@ func TestStatusThresholds(t *testing.T) {
 			t.Fatalf("риск без темпа: %s", v.RiskText)
 		}
 	})
+}
+
+func TestMandatoryRowsSorted(t *testing.T) {
+	in := prototypeInput(t)
+	in.Mandatory = []Payment{
+		{Name: "Альфа", Amount: 100},
+		{Name: "Бета", Amount: 100},
+		{Name: "Оплачено позже", Amount: 500, Paid: true},
+		{Name: "Крупное", Amount: 400},
+		{Name: "Оплачено раньше", Amount: 500, Paid: true},
+		{Name: "Мелочь", Amount: 50, Paid: true},
+	}
+	v := Build(in)
+	got := make([]string, len(v.Mandatory.Rows))
+	for i, p := range v.Mandatory.Rows {
+		got[i] = p.Name
+	}
+	want := []string{"Крупное", "Альфа", "Бета", "Оплачено позже", "Оплачено раньше", "Мелочь"}
+	if len(got) != len(want) {
+		t.Fatalf("строки %v", got)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("порядок %v, ждали %v", got, want)
+		}
+	}
+	if v.Mandatory.Total != 1650 || v.Free != in.Planned-1650 {
+		t.Fatalf("порядок сдвинул суммы: итог %d свободно %d", v.Mandatory.Total, v.Free)
+	}
 }
 
 func TestBalanceFreeMoney(t *testing.T) {
