@@ -155,6 +155,12 @@ func Assemble(now time.Time, bf BudgetFile, mp Mapping, opsGrid, curGrid, prevGr
 			p.Paid = true
 			p.PaidNote = note
 		}
+		sort.SortFunc(mandatory, func(i, j int) bool {
+			if mandatory[i].Paid != mandatory[j].Paid {
+				return !mandatory[i].Paid
+			}
+			return mandatory[i].Amount > mandatory[j].Amount
+		})
 		mandatory = append(mandatory, p)
 	}
 
