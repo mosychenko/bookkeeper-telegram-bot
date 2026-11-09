@@ -3,6 +3,7 @@ package sheet
 import (
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -69,9 +70,19 @@ func Assemble(now time.Time, bf BudgetFile, mp Mapping, opsGrid, curGrid, prevGr
 		incomeName = mp.Monthly.IncomeRows.Advance
 		incomeDefault = bf.Income.Advance
 	}
-	balance, _, err := actualBalance(curGrid, mp, period.Kind)
+	balance, balanceKnown, balanceAsOf, balanceDateOK, err := actualBalance(curGrid, mp)
 	if err != nil {
 		return budget.Input{}, err
+	}
+	if !balanceKnown {
+		if mp.Monthly.Balance.Row == 0 {
+			warns = append(warns, "Баланс в настройках листа не задан. Свободные считаются от планового дохода.")
+		} else {
+			cell := strings.ToUpper(strings.TrimSpace(mp.Monthly.Balance.Column)) + strconv.Itoa(mp.Monthly.Balance.Row)
+			warns = append(warns, fmt.Sprintf("Баланс в ячейке %s пустой или не число. Свободные считаются от планового дохода.", cell))
+		}
+	} else if balanceDateOK && budget.DateOnly(balanceAsOf).Before(budget.DateOnly(now)) {
+		warns = append(warns, fmt.Sprintf("Баланс в листе от %s, сегодня %s. Свободные считаются от этой цифры.", budget.FormatDayMonth(balanceAsOf), budget.FormatDayMonth(now)))
 	}
 	planned, plannedKnown, err := plannedIncome(curGrid, mp, period.Kind)
 	if err != nil {
@@ -80,7 +91,6 @@ func Assemble(now time.Time, bf BudgetFile, mp Mapping, opsGrid, curGrid, prevGr
 	if mp.Monthly.IncomePlan.Row == 0 {
 		planned, plannedKnown = incomeFrom(cur, incomeName, planCol)
 	}
-
 	if !plannedKnown {
 		planned = incomeDefault
 		label := incomeName
@@ -115,6 +125,12 @@ func Assemble(now time.Time, bf BudgetFile, mp Mapping, opsGrid, curGrid, prevGr
 				Name:   item.Name,
 				Amount: amount,
 				Due:    item.DueLabel(period.Month, period.Kind),
+			}
+			// C3 already has the whole piggy bank taken out: 10% of salary
+			// and rent. Subtracting this line again would count it twice.
+			// The fallback to planned income still counts the full line.
+			if balanceKnown {
+				p.CoveredByBalance = amount
 			}
 			mandatory = append(mandatory, p)
 			continue
@@ -203,6 +219,8 @@ func Assemble(now time.Time, bf BudgetFile, mp Mapping, opsGrid, curGrid, prevGr
 		AsOf:            asOf,
 		Period:          period,
 		Balance:         balance,
+		BalanceKnown:    balanceKnown,
+		BalanceAsOf:     balanceAsOf,
 		Planned:         planned,
 		LastIncome:      lastIncome,
 		LastIncomeKnown: lastKnown,
@@ -216,16 +234,20 @@ func Assemble(now time.Time, bf BudgetFile, mp Mapping, opsGrid, curGrid, prevGr
 	}, nil
 }
 
-func actualBalance(grid [][]string, mp Mapping, kind budget.Kind) (int64, bool, error) {
+func actualBalance(grid [][]string, mp Mapping) (amount int64, ok bool, synced time.Time, dateOK bool, err error) {
 	b := mp.Monthly.Balance
 	if b.Row == 0 {
-		return 0, false, nil
+		return 0, false, time.Time{}, false, nil
 	}
 	if err := expectLabel(grid, b.Row, b.LabelColumn, b.Label); err != nil {
-		return 0, false, fmt.Errorf("баланс по счетам: %w", err)
+		return 0, false, time.Time{}, false, fmt.Errorf("баланс по счетам: %w", err)
 	}
-	n, ok := parseMoney(gridCell(grid, b.Row, b.Column))
-	return n, ok, nil
+	n, moneyOK := parseMoney(gridCell(grid, b.Row, b.Column))
+	if !moneyOK {
+		return 0, false, time.Time{}, false, nil
+	}
+	synced, dateOK = parseDate(gridCell(grid, b.Row, b.SyncDate))
+	return n, true, synced, dateOK, nil
 }
 
 func plannedIncome(grid [][]string, mp Mapping, kind budget.Kind) (int64, bool, error) {

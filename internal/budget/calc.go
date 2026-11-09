@@ -8,14 +8,17 @@ import (
 )
 
 // Payment is one mandatory obligation of the period.
-// Amount is counted in full even when it is already paid: the prototype
-// treats "оплачено" as a status, not as money that left the period's plan.
+// The displayed total always includes Amount. Paid means the money has
+// already left the account, so a known balance is not reduced by it.
+// CoveredByBalance is the part of Amount the sheet already removed from
+// the balance (the whole piggy-bank line: 10% of salary and rent).
 type Payment struct {
-	Name     string `json:"name"`
-	Amount   int64  `json:"amount"`
-	Due      string `json:"due"`
-	Paid     bool   `json:"paid"`
-	PaidNote string `json:"paidNote,omitempty"`
+	Name             string `json:"name"`
+	Amount           int64  `json:"amount"`
+	Due              string `json:"due"`
+	Paid             bool   `json:"paid"`
+	PaidNote         string `json:"paidNote,omitempty"`
+	CoveredByBalance int64  `json:"coveredByBalance,omitempty"`
 }
 
 // Flex is one flexible category. A nil Plan means the limit is not set
@@ -36,12 +39,18 @@ type Spent struct {
 // Input is everything the screen needs. Fixture and the sheet assembler
 // both produce this; Build does not read the table itself.
 type Input struct {
-	Now     time.Time
-	AsOf    time.Time
-	Period  Period
-	Demo    bool
-	Balance int64
-	Planned int64
+	Now    time.Time
+	AsOf   time.Time
+	Period Period
+	Demo   bool
+	// Balance is the account total already net of the whole piggy bank.
+	// It is used only when BalanceKnown. Otherwise free money falls back
+	// to Planned, and the caller explains that in Warnings.
+	Balance      int64
+	BalanceKnown bool
+	// BalanceAsOf is the sheet sync date. Zero means "use Now, then AsOf".
+	BalanceAsOf time.Time
+	Planned     int64
 	// LastIncome is the same kind of inflow last month (salary or advance).
 	LastIncome      int64
 	LastIncomeKnown bool
@@ -134,29 +143,49 @@ type TopView struct {
 
 // Build answers "will the money last until the next payday?".
 //
-//	free   = planned income − sum of mandatory amounts
-//	status = Нет       if free < 0
-//	         Впритык   if free/days is strictly below last month's flexible pace
-//	         Да        otherwise
+// With a known balance, free money is that balance minus mandatory
+// payments that are still ahead. Paid lines have already left the
+// account. CoveredByBalance (the piggy bank) is already out of the
+// balance, so it is not taken off again. "Per day" divides by the days
+// from the balance date through the day before the next payday.
 //
-// The displayed per-day amount is rounded to the ruble. The threshold uses
-// the exact ratio, the same way the prototype compares free/days with the pace.
+// Without a balance, free money is planned income minus every mandatory
+// amount, paid or not, over the whole period. That is the prototype.
+//
+// The status compares the exact free/day ratio with last period's
+// flexible pace. Both numbers are rubles per day, so a shorter remainder
+// does not change the meaning of «Впритык».
+//
+// Mandatory.Total and the risk line always use the full mandatory sum.
+// The risk "per day" stays on the full period: it is a what-if about
+// the period's income, not about today's balance.
 func Build(in Input) View {
-	days := in.Period.Days
-	if days < 1 {
-		days = 1
-	}
-	var mandatoryTotal int64
 	rows := append([]Payment(nil), in.Mandatory...)
 	if rows == nil {
 		rows = []Payment{}
 	}
+	var mandatoryTotal int64
+	var stillToPay int64
 	for _, p := range rows {
+		mandatoryTotal += p.Amount
 		if p.Paid {
-			mandatoryTotal += p.Amount
+			continue
+		}
+		rest := p.Amount - p.CoveredByBalance
+		if rest > 0 {
+			stillToPay += rest
 		}
 	}
-	free := in.Balance - mandatoryTotal
+
+	days := in.Period.Days
+	free := in.Planned - mandatoryTotal
+	if in.BalanceKnown {
+		free = in.Balance - stillToPay
+		days = daysThroughPayday(balanceClock(in), in.Period.NextPayday)
+	}
+	if days < 1 {
+		days = 1
+	}
 	exactPerDay := float64(free) / float64(days)
 	perDay := RoundDiv(free, int64(days))
 
@@ -164,8 +193,12 @@ func Build(in Input) View {
 
 	prevYear, prevMonth := in.Period.PreviousFundingMonth()
 	_ = prevYear
+	riskDays := in.Period.Days
+	if riskDays < 1 {
+		riskDays = 1
+	}
 	riskFree := in.LastIncome - mandatoryTotal
-	riskPerDay := RoundDiv(riskFree, int64(days))
+	riskPerDay := RoundDiv(riskFree, int64(riskDays))
 
 	flexRows := flexibleRows(in.Flexible)
 	suggestions := cover(flexRows)
@@ -205,14 +238,14 @@ func Build(in Input) View {
 		Title:         "Деньги до зарплаты",
 		AsOf:          FormatDayMonthPadded(in.AsOf),
 		PeriodLabel:   in.Period.Label(),
-		Days:          in.Period.Days,
+		Days:          days,
 		Question:      "Хватит до " + FormatDayMonth(in.Period.NextPayday) + "?",
 		Status:        status,
 		StatusText:    statusText,
 		Free:          free,
 		PerDay:        perDay,
 		FreeCaption:   "свободно после обязательных",
-		PerDayCaption: fmt.Sprintf("можно тратить в день, %d %s", in.Period.Days, daysWord(in.Period.Days)),
+		PerDayCaption: fmt.Sprintf("можно тратить в день, %d %s", days, daysWord(days)),
 		RiskText:      riskText(in, prevMonth, riskFree, riskPerDay),
 		LastPace:      in.LastFlexPerDay,
 		PaceKnown:     in.PaceKnown,
@@ -245,6 +278,25 @@ func Build(in Input) View {
 		Warnings:   warnings,
 		SourceNote: sourceNote,
 	}
+}
+
+// balanceClock is the day the balance describes: the sheet sync date,
+// otherwise today, otherwise the data date.
+func balanceClock(in Input) time.Time {
+	if !in.BalanceAsOf.IsZero() {
+		return DateOnly(in.BalanceAsOf)
+	}
+	if !in.Now.IsZero() {
+		return DateOnly(in.Now)
+	}
+	return DateOnly(in.AsOf)
+}
+
+// daysThroughPayday counts the calendar days from from through the day
+// before nextPayday. That is the same inclusive span as Period.Days.
+func daysThroughPayday(from, nextPayday time.Time) int {
+	end := DateOnly(nextPayday).AddDate(0, 0, -1)
+	return inclusiveDays(DateOnly(from), end)
 }
 
 func statusOf(free int64, exactPerDay float64, paceKnown bool, pace int64) (string, string) {
