@@ -1,8 +1,9 @@
 package sheet
 
 import (
+	"cmp"
 	"fmt"
-	"sort"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -451,11 +452,11 @@ func rank(ops []Operation, start, end time.Time, types TypeNames) []budget.Spent
 	for _, a := range by {
 		list = append(list, budget.Spent{Name: a.name, Amount: a.sum})
 	}
-	sort.Slice(list, func(i, j int) bool {
-		if list[i].Amount != list[j].Amount {
-			return list[i].Amount > list[j].Amount
+	slices.SortFunc(list, func(a, b budget.Spent) int {
+		if c := cmp.Compare(b.Amount, a.Amount); c != 0 {
+			return c
 		}
-		return list[i].Name < list[j].Name
+		return cmp.Compare(a.Name, b.Name)
 	})
 	if len(list) > 5 {
 		list = list[:5]
@@ -481,11 +482,11 @@ func rankMonthly(rows map[string]CatRow) []budget.Spent {
 	for _, a := range by {
 		list = append(list, budget.Spent{Name: a.name, Amount: a.sum})
 	}
-	sort.Slice(list, func(i, j int) bool {
-		if list[i].Amount != list[j].Amount {
-			return list[i].Amount > list[j].Amount
+	slices.SortFunc(list, func(a, b budget.Spent) int {
+		if c := cmp.Compare(b.Amount, a.Amount); c != 0 {
+			return c
 		}
-		return list[i].Name < list[j].Name
+		return cmp.Compare(a.Name, b.Name)
 	})
 	if len(list) > 5 {
 		list = list[:5]

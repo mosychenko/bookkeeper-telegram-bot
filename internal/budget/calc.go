@@ -4,7 +4,6 @@ import (
 	"cmp"
 	"fmt"
 	"slices"
-	"sort"
 	"strings"
 	"time"
 )
@@ -380,19 +379,21 @@ func flexibleRows(in []Flex) []FlexRow {
 			Overspent: overspendOf(f) > 0,
 		}
 	}
-	sort.SliceStable(rows, func(i, j int) bool {
-		ai := overAmount(rows[i])
-		aj := overAmount(rows[j])
-		if ai > 0 && aj == 0 {
-			return true
+	slices.SortStableFunc(rows, func(a, b FlexRow) int {
+		ai := overAmount(a)
+		aj := overAmount(b)
+		aOver := ai > 0
+		bOver := aj > 0
+		if aOver != bOver {
+			if aOver {
+				return -1
+			}
+			return 1
 		}
-		if aj > 0 && ai == 0 {
-			return false
+		if aOver {
+			return cmp.Compare(aj, ai)
 		}
-		if ai > 0 && aj > 0 && ai != aj {
-			return ai > aj
-		}
-		return false
+		return 0
 	})
 	return rows
 }
@@ -439,11 +440,11 @@ func cover(rows []FlexRow) []Suggestion {
 			}
 			donors = append(donors, donor{other.Name, left[other.Name]})
 		}
-		sort.Slice(donors, func(i, j int) bool {
-			if donors[i].left != donors[j].left {
-				return donors[i].left > donors[j].left
+		slices.SortFunc(donors, func(a, b donor) int {
+			if c := cmp.Compare(b.left, a.left); c != 0 {
+				return c
 			}
-			return donors[i].name < donors[j].name
+			return cmp.Compare(a.name, b.name)
 		})
 		s := Suggestion{Category: r.Name, Overspend: need}
 		for _, d := range donors {
