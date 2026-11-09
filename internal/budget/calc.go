@@ -40,6 +40,7 @@ type Input struct {
 	AsOf    time.Time
 	Period  Period
 	Demo    bool
+	Balance int64
 	Planned int64
 	// LastIncome is the same kind of inflow last month (salary or advance).
 	LastIncome      int64
@@ -151,9 +152,11 @@ func Build(in Input) View {
 		rows = []Payment{}
 	}
 	for _, p := range rows {
-		mandatoryTotal += p.Amount
+		if p.Paid {
+			mandatoryTotal += p.Amount
+		}
 	}
-	free := in.Planned - mandatoryTotal
+	free := in.Balance - mandatoryTotal
 	exactPerDay := float64(free) / float64(days)
 	perDay := RoundDiv(free, int64(days))
 

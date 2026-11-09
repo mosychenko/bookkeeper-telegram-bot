@@ -43,7 +43,7 @@ types:
 
 monthly:
   header_row: 1
-  first_data_row: 5
+  first_data_row: 6
   read_range: "A1:J44"
   columns:
     category: "A"        # имя с префиксом «- », иначе пусто у кредитов
@@ -53,10 +53,17 @@ monthly:
     fact: "E"
     diff: "F"
     comment: "G"
-  # Строка 3 «Доход»: C план зарплаты, D план аванса.
+  # Строка 3 "Баланс" - текущий баланс на счетах за вычетом копилки 10%
+  balance:
+    row: 3
+    label: "Баланс"
+    label_column: "A"
+    sync_date: "B"
+    column: "C"
+  # Строка 4 «Доход»: C план зарплаты, D план аванса.
   # E3 это сумма факта расходов, не доход.
   income_plan:
-    row: 3
+    row: 4
     label: "Доход"
     label_column: "A"
     salary_column: "C"
@@ -64,29 +71,29 @@ monthly:
   # Факт прихода в блоке I:J. Ноль в ячейке это известный ноль, не пустота.
   income_actual:
     salary:
-      row: 3
+      row: 4
       column: "J"
       label: "Зарплата (вкл. отпускные)"
       label_column: "I"
     advance:
-      row: 4
+      row: 5
       column: "J"
       label: "Аванс"
       label_column: "I"
     wife:
-      row: 5
+      row: 6
       column: "J"
       label: "Доход Женя"
       label_column: "I"
     # J6 и J8 читаются только чтобы поймать сдвиг колонки.
     # В доход периода и в копилку они не входят.
     other:
-      row: 6
+      row: 7
       column: "J"
       label: "Прочие поступления"
       label_column: "I"
     loan:
-      row: 8
+      row: 9
       column: "J"
       label: "Заём у мамы (не доход)"
       label_column: "I"

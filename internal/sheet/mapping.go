@@ -27,6 +27,7 @@ type MonthlyMap struct {
 	Columns       map[string]string `yaml:"columns"`
 	ExpectHeaders map[string]string `yaml:"expect_headers"`
 	ReadRange     string            `yaml:"read_range"`
+	Balance       Balance           `yaml:"balance"`
 	// IncomeRows is the legacy lookup by category name. The live sheet
 	// keeps planned income on one row (income_plan) and actual income in
 	// the I/J block (income_actual). Those win when their row is set.
@@ -36,6 +37,14 @@ type MonthlyMap struct {
 	} `yaml:"income_rows"`
 	IncomePlan   IncomePlan   `yaml:"income_plan"`
 	IncomeActual IncomeActual `yaml:"income_actual"`
+}
+
+type Balance struct {
+	Row         int    `yaml:"row"`
+	Label       string `yaml:"label"`
+	LabelColumn string `yaml:"label_column"`
+	SyncDate    string `yaml:"sync_date"`
+	Column      string `yaml:"column"`
 }
 
 // IncomePlan is the «Доход» row: salary plan and advance plan are two

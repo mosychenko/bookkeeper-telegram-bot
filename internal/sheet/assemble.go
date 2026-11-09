@@ -69,7 +69,10 @@ func Assemble(now time.Time, bf BudgetFile, mp Mapping, opsGrid, curGrid, prevGr
 		incomeName = mp.Monthly.IncomeRows.Advance
 		incomeDefault = bf.Income.Advance
 	}
-
+	balance, _, err := actualBalance(curGrid, mp, period.Kind)
+	if err != nil {
+		return budget.Input{}, err
+	}
 	planned, plannedKnown, err := plannedIncome(curGrid, mp, period.Kind)
 	if err != nil {
 		return budget.Input{}, err
@@ -77,6 +80,7 @@ func Assemble(now time.Time, bf BudgetFile, mp Mapping, opsGrid, curGrid, prevGr
 	if mp.Monthly.IncomePlan.Row == 0 {
 		planned, plannedKnown = incomeFrom(cur, incomeName, planCol)
 	}
+
 	if !plannedKnown {
 		planned = incomeDefault
 		label := incomeName
@@ -198,6 +202,7 @@ func Assemble(now time.Time, bf BudgetFile, mp Mapping, opsGrid, curGrid, prevGr
 		Now:             now,
 		AsOf:            asOf,
 		Period:          period,
+		Balance:         balance,
 		Planned:         planned,
 		LastIncome:      lastIncome,
 		LastIncomeKnown: lastKnown,
@@ -209,6 +214,18 @@ func Assemble(now time.Time, bf BudgetFile, mp Mapping, opsGrid, curGrid, prevGr
 		HasPeriodSpend:  hasSpend,
 		Warnings:        warns,
 	}, nil
+}
+
+func actualBalance(grid [][]string, mp Mapping, kind budget.Kind) (int64, bool, error) {
+	b := mp.Monthly.Balance
+	if b.Row == 0 {
+		return 0, false, nil
+	}
+	if err := expectLabel(grid, b.Row, b.LabelColumn, b.Label); err != nil {
+		return 0, false, fmt.Errorf("баланс по счетам: %w", err)
+	}
+	n, ok := parseMoney(gridCell(grid, b.Row, b.Column))
+	return n, ok, nil
 }
 
 func plannedIncome(grid [][]string, mp Mapping, kind budget.Kind) (int64, bool, error) {
