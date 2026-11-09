@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -28,8 +29,8 @@ func TestNovemberLayout(t *testing.T) {
 		"2026-11-02 09:00", "Ноябрь", "*1", "Яндекс Плюс", "", "-990", "Расход", "", "", "Подписки", "990", "Выполнено", "",
 	})
 
-	if nov[2][0] != "Доход" || oct[2][0] != "Доход" {
-		t.Fatalf("строка дохода съехала: ноябрь %q октябрь %q", nov[2][0], oct[2][0])
+	if nov[2][0] != "Баланс" || oct[2][0] != "Баланс" || nov[3][0] != "Доход" || oct[3][0] != "Доход" {
+		t.Fatalf("строки съехали: ноябрь %q/%q октябрь %q/%q", nov[2][0], nov[3][0], oct[2][0], oct[3][0])
 	}
 
 	parsed := parseMonthly(nov, mp)
@@ -64,7 +65,10 @@ func TestNovemberLayout(t *testing.T) {
 		t.Fatal(err)
 	}
 	if in.Planned != 270000 {
-		t.Fatalf("план зарплаты %d, это должна быть C3, не факт расходов E3", in.Planned)
+		t.Fatalf("план зарплаты %d, это должна быть C4, не баланс C3 и не факт расходов", in.Planned)
+	}
+	if !in.BalanceKnown || in.Balance != 200000 {
+		t.Fatalf("баланс %d known %v", in.Balance, in.BalanceKnown)
 	}
 	if !in.LastIncomeKnown || in.LastIncome != 252526 {
 		t.Fatalf("октябрьская зарплата %d known %v, ждали 252526 из J3", in.LastIncome, in.LastIncomeKnown)
@@ -137,10 +141,14 @@ func TestNovemberLayout(t *testing.T) {
 		t.Fatal("продукты с октябрьским фактом должны остаться на экране")
 	}
 	view := budget.Build(in)
-	// В ячейке C44 лежит (C3+D3)/10 = 52 000. Пока зарплата не пришла,
-	// копилка периода это 10% только C3, то есть 27 000.
-	if view.Mandatory.Total != 198766 || view.Free != 71234 || view.PerDay != 4749 || view.StatusText != "Впритык" {
-		t.Fatalf("ноябрь зарплата: обязательные %d свободно %d в день %d статус %s", view.Mandatory.Total, view.Free, view.PerDay, view.StatusText)
+	// Копилка 27 000 уже вычтена в C3, подписки 1 000 оплачены.
+	// 198 766 − 27 000 − 1 000 = 170 766 ещё впереди. Баланс 200 000.
+	// Дата баланса 10.11, до 20.11 остаётся 10 дней.
+	if view.Mandatory.Total != 198766 || view.Free != 29234 || view.PerDay != 2923 || view.Days != 10 || view.StatusText != "Впритык" {
+		t.Fatalf("ноябрь зарплата: обязательные %d свободно %d в день %d дней %d статус %s", view.Mandatory.Total, view.Free, view.PerDay, view.Days, view.StatusText)
+	}
+	if view.PerDayCaption != "можно тратить в день, 10 дней" {
+		t.Fatalf("подпись дня %q", view.PerDayCaption)
 	}
 
 	advanceNow := time.Date(2026, time.November, 20, 12, 0, 0, 0, time.UTC)
@@ -149,7 +157,7 @@ func TestNovemberLayout(t *testing.T) {
 		t.Fatal(err)
 	}
 	if adv.Planned != 250000 {
-		t.Fatalf("план аванса %d, ждали D3", adv.Planned)
+		t.Fatalf("план аванса %d, ждали D4", adv.Planned)
 	}
 	if !adv.LastIncomeKnown || adv.LastIncome != 252150 {
 		t.Fatalf("октябрьский аванс %d known %v, ждали J4", adv.LastIncome, adv.LastIncomeKnown)
@@ -191,6 +199,25 @@ func TestNovemberLayout(t *testing.T) {
 	advView := budget.Build(adv)
 	if advView.Mandatory.Total != 205177 {
 		t.Fatalf("обязательные аванса %d", advView.Mandatory.Total)
+	}
+	var still int64
+	for _, p := range adv.Mandatory {
+		if p.Name == "Сбережения (Копилка 10%)" && p.CoveredByBalance != p.Amount {
+			t.Fatalf("копилка аванса должна уже быть в балансе: %+v", p)
+		}
+		if p.Paid || p.CoveredByBalance >= p.Amount {
+			continue
+		}
+		still += p.Amount - p.CoveredByBalance
+	}
+	if advView.Free != adv.Balance-still {
+		t.Fatalf("свободно аванса %d, баланс %d ещё заплатить %d", advView.Free, adv.Balance, still)
+	}
+	if advView.Days != 25 {
+		t.Fatalf("дней аванса от даты баланса %d", advView.Days)
+	}
+	if !hasWarning(adv.Warnings, "Баланс в листе от") {
+		t.Fatalf("старый баланс без предупреждения: %#v", adv.Warnings)
 	}
 }
 
@@ -302,6 +329,15 @@ func joinPayments(names []string) string {
 		out += name
 	}
 	return out
+}
+
+func hasWarning(warnings []string, part string) bool {
+	for _, w := range warnings {
+		if strings.Contains(w, part) {
+			return true
+		}
+	}
+	return false
 }
 
 func readLayoutCSV(t *testing.T, name string) [][]string {

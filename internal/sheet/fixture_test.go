@@ -73,13 +73,16 @@ func TestSheetsConfigLoads(t *testing.T) {
 	if m.Monthly.Columns["plan_salary"] != "C" || m.Monthly.Columns["plan_advance"] != "D" || m.Monthly.Columns["fact"] != "E" {
 		t.Fatalf("колонки месяца %+v", m.Monthly.Columns)
 	}
-	if m.Monthly.IncomePlan.Row != 3 || m.Monthly.IncomePlan.SalaryColumn != "C" || m.Monthly.IncomePlan.AdvanceColumn != "D" {
+	if m.Monthly.IncomePlan.Row != 4 || m.Monthly.IncomePlan.SalaryColumn != "C" || m.Monthly.IncomePlan.AdvanceColumn != "D" {
 		t.Fatalf("плановый доход %+v", m.Monthly.IncomePlan)
 	}
-	if m.Monthly.FirstDataRow != 5 || m.Monthly.ReadRange != "A1:J44" {
+	if m.Monthly.Balance.Row != 3 || m.Monthly.Balance.Column != "C" || m.Monthly.Balance.SyncDate != "B" {
+		t.Fatalf("баланс %+v", m.Monthly.Balance)
+	}
+	if m.Monthly.FirstDataRow != 6 || m.Monthly.ReadRange != "A1:J46" {
 		t.Fatalf("диапазон месяца %+v", m.Monthly)
 	}
-	if m.Monthly.IncomeActual.Salary.Column != "J" || m.Monthly.IncomeActual.Advance.Row != 4 {
+	if m.Monthly.IncomeActual.Salary.Row != 4 || m.Monthly.IncomeActual.Advance.Row != 5 || m.Monthly.IncomeActual.Other.Row != 7 || m.Monthly.IncomeActual.Loan.Row != 9 {
 		t.Fatalf("фактический доход %+v", m.Monthly.IncomeActual)
 	}
 	bf, err := LoadBudget(filepath.Join(repoRoot(t), "config", "budget.yaml"))

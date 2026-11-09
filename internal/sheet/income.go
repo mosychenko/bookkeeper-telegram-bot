@@ -10,9 +10,9 @@ import (
 // salaryInPeriod is the salary-category inflow of one period.
 // Operations win when the sheet has any salary or excluded income row,
 // because only dates can split «Доход Женя» between the 5th and the 20th.
-// Otherwise the monthly J block is used: J3 (plus J5) for the salary
-// period and J4 for the advance period. «Прочие поступления» and loans
-// are never added.
+// Otherwise the monthly J block is used: salary plus «Доход Женя» for
+// the salary period, and the advance cell for the advance period.
+// «Прочие поступления» and loans are never added.
 func salaryInPeriod(ops []Operation, grid [][]string, bf BudgetFile, mp Mapping, period budget.Period) (amount int64, known bool, rent int64, err error) {
 	if err := ignoreNonSalary(grid, mp); err != nil {
 		return 0, false, 0, err
@@ -27,7 +27,9 @@ func salaryInPeriod(ops []Operation, grid [][]string, bf BudgetFile, mp Mapping,
 }
 
 // savingsAmount is 10% of the period's salary once it has arrived, otherwise
-// 10% of that period's plan (C3 or D3). Rent is added in full on top.
+// 10% of that period's planned income (the salary or advance column of the
+// income row). Rent is added in full on top. The account balance already
+// has this whole sum removed, so a known balance does not subtract it again.
 func savingsAmount(actual int64, known bool, planned, rent int64, rate float64) int64 {
 	base := planned
 	if known && actual > 0 {

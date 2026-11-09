@@ -202,6 +202,60 @@ func TestStatusThresholds(t *testing.T) {
 	})
 }
 
+func TestBalanceFreeMoney(t *testing.T) {
+	in := prototypeInput(t)
+	in.Demo = false
+	in.BalanceKnown = true
+	in.Balance = 100000
+	in.BalanceAsOf = time.Date(2026, time.November, 10, 0, 0, 0, 0, time.UTC)
+	in.Now = in.BalanceAsOf
+	// The sheet balance already excludes the whole piggy bank.
+	in.Mandatory[0].CoveredByBalance = in.Mandatory[0].Amount
+
+	v := Build(in)
+	// Unpaid and not already in the balance. Subscriptions are paid.
+	// 223766 − 52000 копилка − 1000 подписки = 170766 still to pay.
+	if v.Mandatory.Total != 223766 {
+		t.Fatalf("итог обязательных %d, хотели полную сумму", v.Mandatory.Total)
+	}
+	if v.Free != 100000-(223766-52000-1000) {
+		t.Fatalf("свободно %d", v.Free)
+	}
+	if v.Days != 10 || v.PerDayCaption != "можно тратить в день, 10 дней" {
+		t.Fatalf("дни %d подпись %q", v.Days, v.PerDayCaption)
+	}
+	if v.PerDay != RoundDiv(v.Free, 10) {
+		t.Fatalf("в день %d при свободно %d", v.PerDay, v.Free)
+	}
+	// Risk stays on the full obligation and the full 15-day period.
+	wantRisk := "В октябре на гибкие траты уходило 3 891 ₽ в день. Если зарплата придёт как в октябре (252 526 ₽), а не 270 000 ₽ по плану, свободно 28 760 ₽, это 1 917 ₽ в день."
+	if v.RiskText != wantRisk {
+		t.Fatalf("риск:\n got %s\nwant %s", v.RiskText, wantRisk)
+	}
+	// 10 remaining days make the same free money a higher daily rate than
+	// spreading it across all 15. 40 000 / 10 is above the pace, so «Да»;
+	// 40 000 / 15 would still be «Впритык».
+	in.Balance = 170766 + 40000
+	v = Build(in)
+	if v.Free != 40000 || v.StatusText != "Да" || v.PerDay != 4000 {
+		t.Fatalf("остаток периода: free %d day %d status %s", v.Free, v.PerDay, v.StatusText)
+	}
+}
+
+func TestBalanceFallsBackWhenUnknown(t *testing.T) {
+	in := prototypeInput(t)
+	in.Balance = 0
+	in.BalanceKnown = false
+	in.Warnings = []string{"Баланс в ячейке C3 пустой или не число. Свободные считаются от планового дохода."}
+	v := Build(in)
+	if v.Free != 46234 || v.PerDay != 3082 || v.Days != 15 || v.StatusText != "Впритык" {
+		t.Fatalf("откат: free %d day %d days %d status %s", v.Free, v.PerDay, v.Days, v.StatusText)
+	}
+	if len(v.Warnings) != 1 || v.Warnings[0] == "" {
+		t.Fatalf("предупреждение: %#v", v.Warnings)
+	}
+}
+
 func (in Input) MandatoryTotal() int64 {
 	var n int64
 	for _, p := range in.Mandatory {
