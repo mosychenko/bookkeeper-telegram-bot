@@ -35,8 +35,12 @@ type BudgetFile struct {
 	// amount is added to the копилка (rent, once the sheet has a name).
 	ExcludedIncomeCategories []string `yaml:"excluded_income_categories"`
 	// SavingsRate is the share of salary income that goes to the копилка.
-	SavingsRate      float64  `yaml:"savings_rate"`
-	PaidStatusValues []string `yaml:"paid_status_values"`
+	SavingsRate float64 `yaml:"savings_rate"`
+	// SavingsAccountMarker matches the piggy-bank account, for example "*5348".
+	SavingsAccountMarker string `yaml:"savings_account_marker"`
+	// SavingsContributionCategory counts a row when the account marker does not.
+	SavingsContributionCategory string   `yaml:"savings_contribution_category"`
+	PaidStatusValues            []string `yaml:"paid_status_values"`
 }
 
 type MandatoryItem struct {

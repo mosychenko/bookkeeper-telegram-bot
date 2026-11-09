@@ -16,6 +16,7 @@ type Operation struct {
 	Month          string
 	Description    string
 	Comment        string
+	Account        string
 	Amount         int64
 	AmountOK       bool
 	Type           string
@@ -52,6 +53,7 @@ func parseOperations(grid [][]string, m Mapping) ([]Operation, []string) {
 			Month:          cellAt(row, m, "ops", "month"),
 			Description:    cellAt(row, m, "ops", "description"),
 			Comment:        cellAt(row, m, "ops", "comment"),
+			Account:        cellAt(row, m, "ops", "account"),
 			Type:           cellAt(row, m, "ops", "type"),
 			BudgetCategory: cellAt(row, m, "ops", "budget_category"),
 			Status:         cellAt(row, m, "ops", "status"),

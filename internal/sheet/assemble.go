@@ -129,9 +129,14 @@ func Assemble(now time.Time, bf BudgetFile, mp Mapping, opsGrid, curGrid, prevGr
 			}
 			// C3 already has the whole piggy bank taken out: 10% of salary
 			// and rent. Subtracting this line again would count it twice.
-			// The fallback to planned income still counts the full line.
+			// The fallback to planned income still counts the full line,
+			// whether or not the transfer is marked paid.
 			if balanceKnown {
 				p.CoveredByBalance = amount
+			}
+			if note, paid := savingsNote(ops, bf, amount, period); note != "" {
+				p.Paid = paid
+				p.PaidNote = note
 			}
 			mandatory = append(mandatory, p)
 			continue
@@ -337,6 +342,63 @@ func factOf(source string, row CatRow, ops []Operation, category string, start, 
 		return *row.Fact
 	}
 	return 0
+}
+
+// savingsNote sums piggy-bank deposits dated inside this period.
+// The window is the period itself, not the funding month: a transfer on
+// the 5th belongs to the salary period and must not also pay the advance
+// period. Other bills use the funding month because a subscription dated
+// the 1st still belongs to the salary period.
+// A row counts when the account contains the marker, or, if it does not,
+// when its budget category is the contribution category. The amount is
+// column M; an empty M uses the absolute value of column F. Only a
+// «Выполнено» status counts. The line is paid when the sum covers it.
+func savingsNote(ops []Operation, bf BudgetFile, amount int64, period budget.Period) (string, bool) {
+	sum := savingsDeposits(ops, bf, period.Start, period.End)
+	if sum <= 0 {
+		return "", false
+	}
+	if sum >= amount {
+		return budget.FormatRUB(sum) + " на копилку", true
+	}
+	return "внесено " + budget.FormatRUB(sum) + " из " + budget.FormatRUB(amount), false
+}
+
+func savingsDeposits(ops []Operation, bf BudgetFile, start, end time.Time) int64 {
+	var sum int64
+	for _, op := range ops {
+		if !bf.paid(op.Status) || !op.DateOK || !budget.InRange(op.Date, start, end) {
+			continue
+		}
+		if !savingsDeposit(op, bf) {
+			continue
+		}
+		n, ok := depositAmount(op)
+		if !ok {
+			continue
+		}
+		sum += n
+	}
+	return sum
+}
+
+func savingsDeposit(op Operation, bf BudgetFile) bool {
+	marker := strings.TrimSpace(bf.SavingsAccountMarker)
+	if marker != "" && strings.Contains(op.Account, marker) {
+		return true
+	}
+	category := strings.TrimSpace(bf.SavingsContributionCategory)
+	return category != "" && same(op.BudgetCategory, category)
+}
+
+func depositAmount(op Operation) (int64, bool) {
+	if strings.TrimSpace(op.Savings) != "" {
+		return parseMoney(op.Savings)
+	}
+	if op.AmountOK {
+		return abs64(op.Amount), true
+	}
+	return 0, false
 }
 
 func paidNote(ops []Operation, bf BudgetFile, category string, period budget.Period) (string, bool) {
