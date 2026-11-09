@@ -1,7 +1,9 @@
 package budget
 
 import (
+	"cmp"
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -176,6 +178,17 @@ func Build(in Input) View {
 			stillToPay += rest
 		}
 	}
+	// Unpaid first, then paid. Inside each group, larger amounts come first.
+	// Equal amounts keep the order from the config.
+	slices.SortStableFunc(rows, func(a, b Payment) int {
+		if a.Paid != b.Paid {
+			if a.Paid {
+				return 1
+			}
+			return -1
+		}
+		return cmp.Compare(b.Amount, a.Amount)
+	})
 
 	days := in.Period.Days
 	free := in.Planned - mandatoryTotal
